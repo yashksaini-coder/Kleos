@@ -1,0 +1,5 @@
+mindsdb_sdk
+click
+python-dotenv
+ollama
+google-generativeai
