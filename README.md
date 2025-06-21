@@ -99,35 +99,88 @@ When passing complex parameters as JSON strings via options like `--metadata-map
 *   **For Linux/macOS (bash, zsh) or PowerShell:** Often, enclosing the JSON string in single quotes (`'`) is sufficient:
     Example: `--metadata-map '{"key":"value"}'`
 
-For more detailed examples and explanations for different shells, please consult the [**COMMANDS_REFERENCE.md**](./COMMANDS_REFERENCE.md) file.
+**Knowledge Base Improvements:**
+The Knowledge Base commands have been enhanced and thoroughly tested with:
+- **Auto-detection** of sensible content and metadata columns for HackerNews tables (stories, comments)
+- **Improved error handling** with clear, actionable error messages for common issues
+- **Robust JSON parsing** with platform-specific examples for Windows CMD, PowerShell, and Unix shells
+- **Automatic datasource creation** when the HackerNews datasource is missing
+- **Enhanced column mapping** flexibility for custom use cases and data sources
+- **Validated SQL generation** ensuring correct INSERT INTO ... SELECT syntax for MindsDB
+- **Windows compatibility** with proper JSON escaping examples and testing
+
+All command examples have been tested on Windows Command Prompt and include proper JSON escaping patterns.
 
 **Detailed Command Reference:**
-For detailed information on all commands, options, and examples, please consult the [**COMMANDS_REFERENCE.md**](./COMMANDS_REFERENCE.md) file.
+For detailed information on all commands, options, and comprehensive examples for different platforms, please consult the [**COMMANDS_REFERENCE.md**](./COMMANDS_REFERENCE.md) file.
 
 **Quick Examples:**
 
 *   **Setup HackerNews Datasource:**
     ```bash
-    python main.py setup hackernews --name my_hackernews_db
+    python main.py setup hackernews --name hackernews_db
     ```
-*   **Create a Knowledge Base:**
+
+*   **List Available Databases:**
     ```bash
-    python main.py kb create my_documents_kb --embedding-model nomic-embed-text
+    python main.py kb list-databases
     ```
-*   **Ingest Data into a Knowledge Base (Windows CMD/PowerShell example):**
+
+*   **Create a Knowledge Base with Custom Columns:**
     ```bash
-    python main.py kb ingest my_documents_kb --from-hackernews stories --content-column title --metadata-map "{\"doc_id\":\"id\"}" --limit 50
+    # Basic KB creation
+    python main.py kb create my_documents_kb --embedding-model nomic-embed-text --reranking-model llama3
+    
+    # KB creation with custom content and metadata columns
+    python main.py kb create hn_stories_kb --embedding-model nomic-embed-text --reranking-model llama3 --content-columns "title,text" --metadata-columns "id,by,score,time" --id-column id
     ```
-*   **Query a Knowledge Base (Windows CMD/PowerShell example with filter):**
+
+*   **Ingest Data into a Knowledge Base:**
+    
+    **Windows Command Prompt (`cmd.exe`):**
+    ```cmd
+    REM Simple ingestion with auto-detected columns (for HackerNews tables)
+    python main.py kb ingest my_documents_kb --from-hackernews stories --limit 50
+    
+    REM Custom content and metadata mapping
+    python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --metadata-map "{\"story_id\":\"id\", \"author\":\"by\", \"score\":\"score\"}" --limit 100
+    ```
+    
+    **PowerShell/Bash/Zsh:**
     ```bash
+    # Simple ingestion with auto-detected columns (for HackerNews tables)
+    python main.py kb ingest my_documents_kb --from-hackernews stories --limit 50
+    
+    # Custom content and metadata mapping
+    python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --metadata-map '{"story_id":"id", "author":"by", "score":"score"}' --limit 100
+    ```
+
+*   **Query a Knowledge Base:**
+    ```bash
+    # Basic query
     python main.py kb query my_documents_kb "latest trends in AI"
+    
+    # Query with metadata filter (PowerShell/Bash/Zsh)
+    python main.py kb query my_documents_kb "search specific topic" --metadata-filter '{"author":"some_user"}'
+    ```
+    
+    **Windows Command Prompt with metadata filter:**
+    ```cmd
     python main.py kb query my_documents_kb "search specific topic" --metadata-filter "{\"author\":\"some_user\"}"
     ```
-*   **Create an AI Agent for a Knowledge Base (Windows CMD/PowerShell example with params):**
+
+*   **Create an AI Agent for a Knowledge Base:**
+    
+    **PowerShell/Bash/Zsh:**
     ```bash
-    python main.py kb create-agent my_kb_agent my_documents_kb --model-name gemini-pro --agent-params "{\"temperature\":0.2, \"prompt_template\":\"Answer questions based on the KB.\"}"
-    # (Ensure GOOGLE_GEMINI_API_KEY is configured if using Google provider and api_key isn't in --agent-params)
+    python main.py kb create-agent my_kb_agent my_documents_kb --model-name gemini-pro --agent-params '{"temperature":0.2, "prompt_template":"Answer questions based on the KB."}'
     ```
+    
+    **Windows Command Prompt:**
+    ```cmd
+    python main.py kb create-agent my_kb_agent my_documents_kb --model-name gemini-pro --agent-params "{\"temperature\":0.2, \"prompt_template\":\"Answer questions based on the KB.\"}"
+    ```
+
 *   **Query the AI Agent:**
     ```bash
     python main.py kb query-agent my_kb_agent "Summarize articles about Python."

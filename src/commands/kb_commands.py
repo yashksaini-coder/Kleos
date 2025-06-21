@@ -19,9 +19,12 @@ def kb_group():
 @click.option('--reranking-provider', default='ollama', show_default=True, help="Provider for reranking model (optional).") # Default should be None or allow empty
 @click.option('--reranking-model', default=None, help="Name of the reranking model (optional, e.g., llama3).") # Default should be None
 @click.option('--reranking-base-url', default=None, help="Base URL for the reranking model provider (if needed, optional).")
+@click.option('--content-columns', help="Comma-separated list of content columns (e.g., 'title,text'). Defaults to 'title' for HackerNews stories.")
+@click.option('--metadata-columns', help="Comma-separated list of metadata columns (e.g., 'id,time,score'). Defaults to 'id,time,score,descendants' for HackerNews.")
+@click.option('--id-column', help="Name of the ID column (e.g., 'id'). Defaults to 'id' for HackerNews.")
 @click.pass_context
-def kb_create(ctx, kb_name, embedding_provider, embedding_model, embedding_base_url, reranking_provider, reranking_model, reranking_base_url):
-    """Creates a new Knowledge Base."""
+def kb_create(ctx, kb_name, embedding_provider, embedding_model, embedding_base_url, reranking_provider, reranking_model, reranking_base_url, content_columns, metadata_columns, id_column):
+    """Creates a new Knowledge Base with optional content/metadata column specifications."""
     handler = ctx.obj
     if not handler or not handler.project:
         click.echo(click.style("MindsDB connection not available.", fg='red'))
@@ -38,7 +41,23 @@ def kb_create(ctx, kb_name, embedding_provider, embedding_model, embedding_base_
         reranking_provider = None
         reranking_base_url = None # Explicitly set to None if no model
 
+    # Parse content and metadata columns
+    content_columns_list = None
+    if content_columns:
+        content_columns_list = [col.strip() for col in content_columns.split(',')]
+    
+    metadata_columns_list = None
+    if metadata_columns:
+        metadata_columns_list = [col.strip() for col in metadata_columns.split(',')]
+
     click.echo(f"Creating Knowledge Base '{kb_name}'...")
+    if content_columns_list:
+        click.echo(f"Content columns: {content_columns_list}")
+    if metadata_columns_list:
+        click.echo(f"Metadata columns: {metadata_columns_list}")
+    if id_column:
+        click.echo(f"ID column: {id_column}")
+    
     if handler.create_knowledge_base(
         kb_name,
         embedding_model_provider=embedding_provider,
@@ -46,7 +65,10 @@ def kb_create(ctx, kb_name, embedding_provider, embedding_model, embedding_base_
         embedding_model_base_url=embedding_base_url,
         reranking_model_provider=reranking_provider,
         reranking_model_name=reranking_model,
-        reranking_model_base_url=reranking_base_url
+        reranking_model_base_url=reranking_base_url,
+        content_columns=content_columns_list,
+        metadata_columns=metadata_columns_list,
+        id_column=id_column
     ):
         click.echo(click.style(f"Knowledge Base '{kb_name}' created successfully or already exists.", fg='green'))
     else:
@@ -72,38 +94,83 @@ def kb_index(ctx, kb_name):
 @click.option('--from-hackernews', 'from_hackernews_table', help="Name of the HackerNews table to ingest from (e.g., 'stories', 'comments').")
 @click.option('--hn-datasource', default='hackernews', show_default=True, help="Name of the HackerNews datasource in MindsDB.")
 @click.option('--limit', type=int, default=100, show_default=True, help="Number of records to ingest from HackerNews table.")
-@click.option('--content-column', help="Source column for KB content (e.g., 'title' for stories, 'text' for comments). Required if --from-hackernews.")
-@click.option('--metadata-map', help="JSON string mapping KB metadata_cols to source_cols. E.g., '{\"story_id\":\"id\", \"author\":\"by\"}'.")
+@click.option('--content-column', help="Source column for KB content. Auto-detects: 'title' for stories, 'text' for comments.")
+@click.option('--metadata-map', help="JSON string mapping KB metadata_cols to source_cols. Auto-detects for HackerNews tables if not specified.")
 @click.pass_context
 def kb_ingest(ctx, kb_name, from_hackernews_table, hn_datasource, limit, content_column, metadata_map):
-    """Ingests data into a Knowledge Base from a HackerNews table."""
+    """Ingests data into a Knowledge Base from a HackerNews table with smart defaults."""
     handler = ctx.obj
     if not handler or not handler.project:
         click.echo(click.style("MindsDB connection not available.", fg='red')); return
     if not from_hackernews_table:
         click.echo(click.style("Please specify --from-hackernews <table_name>.", fg='red')); return
+    
+    # Smart defaults for HackerNews tables
     if not content_column:
-        click.echo(click.style("Please specify --content-column from the source table.", fg='red')); return
+        if from_hackernews_table == 'stories':
+            content_column = 'title'
+        elif from_hackernews_table == 'comments':
+            content_column = 'text'
+        else:
+            click.echo(click.style("Please specify --content-column for this table.", fg='red')); return
+    
+    # Smart defaults for metadata mapping
     parsed_metadata_map = None
     if metadata_map:
         try:
             parsed_metadata_map = json.loads(metadata_map)
-            if not isinstance(parsed_metadata_map, dict): raise ValueError("metadata-map must be a JSON dictionary.")
-        except Exception as e: click.echo(click.style(f"Invalid JSON in --metadata-map: {e}", fg='red')); return
+            if not isinstance(parsed_metadata_map, dict): 
+                click.echo(click.style("metadata-map must be a JSON dictionary.", fg='red')); return
+            # Validate that all values are strings (column names)
+            for kb_col, source_col in parsed_metadata_map.items():
+                if not isinstance(source_col, str):
+                    raise ValueError(f"All metadata map values must be source column names (strings). Got: {source_col}")
+        except Exception as e: 
+            click.echo(click.style(f"Invalid JSON in --metadata-map: {e}", fg='red')); return
+    else:
+        # Provide smart defaults based on HackerNews table structure
+        if from_hackernews_table == 'stories':
+            parsed_metadata_map = {
+                "story_id": "id",
+                "time": "time", 
+                "score": "score",
+                "descendants": "descendants"
+            }
+        elif from_hackernews_table == 'comments':
+            parsed_metadata_map = {
+                "comment_id": "id",
+                "time": "time",
+                "parent": "parent"
+            }
+        elif from_hackernews_table == 'hnstories':
+            parsed_metadata_map = {
+                "story_id": "id"
+            }
+        click.echo(f"Using smart defaults for {from_hackernews_table}: content='{content_column}', metadata={list(parsed_metadata_map.keys())}")
 
     click.echo(f"Ingesting data from '{hn_datasource}.{from_hackernews_table}' into '{kb_name}'...")
+    
+    # Check if the HackerNews datasource exists, create it if it doesn't
+    if not handler.get_database_custom_check(hn_datasource):
+        click.echo(f"HackerNews datasource '{hn_datasource}' not found. Creating it...")
+        if not handler.create_hackernews_datasource(ds_name=hn_datasource):
+            click.echo(click.style(f"Failed to create HackerNews datasource '{hn_datasource}'.", fg='red'))
+            return
+        click.echo(click.style(f"HackerNews datasource '{hn_datasource}' created successfully.", fg='green'))
+    
+    # Build the source table name
+    source_table = f"{hn_datasource}.{from_hackernews_table}"
+    
+    # Use the new direct insertion method which follows MindsDB's recommended syntax
     try:
-        select_cols_list = [content_column]
-        if parsed_metadata_map: select_cols_list.extend(parsed_metadata_map.values())
-        select_cols_str = ", ".join(sorted(list(set(select_cols_list))))
-        query_fetch_data = f"SELECT {select_cols_str} FROM {hn_datasource}.{from_hackernews_table} ORDER BY id DESC LIMIT {limit}"
-
-        source_data_df = handler.execute_sql(query_fetch_data)
-        if source_data_df is None or source_data_df.empty:
-            click.echo(click.style(f"No data fetched from '{hn_datasource}.{from_hackernews_table}'.", fg='yellow')); return
-
-        source_data_list = source_data_df.to_dict('records')
-        if handler.insert_into_knowledge_base(kb_name, source_data_list, content_column=content_column, metadata_columns=parsed_metadata_map):
+        if handler.insert_into_knowledge_base_direct(
+            kb_name=kb_name, 
+            source_table=source_table,
+            content_column=content_column, 
+            metadata_columns=parsed_metadata_map,
+            limit=limit,
+            order_by="id DESC"
+        ):
             click.echo(click.style(f"Data ingestion into '{kb_name}' initiated successfully.", fg='green'))
         else:
             click.echo(click.style(f"Data ingestion into '{kb_name}' failed.", fg='red'))
@@ -137,6 +204,25 @@ def kb_query(ctx, kb_name, query_text, metadata_filters_str, limit):
             click.echo(click.style("No results found.", fg='yellow'))
     else:
         click.echo(click.style("Failed to query Knowledge Base.", fg='red'))
+
+@kb_group.command('list-databases')
+@click.pass_context
+def kb_list_databases(ctx):
+    """Lists all available databases/datasources in MindsDB."""
+    handler = ctx.obj
+    if not handler or not handler.project:
+        click.echo(click.style("MindsDB connection not available.", fg='red'))
+        return
+    
+    try:
+        databases_df = handler.execute_sql('SHOW DATABASES;')
+        if databases_df is not None and not databases_df.empty:
+            click.echo(click.style("Available databases/datasources:", fg='green'))
+            click.echo(databases_df.to_string(index=False))
+        else:
+            click.echo(click.style("No databases found or query failed.", fg='yellow'))
+    except Exception as e:
+        click.echo(click.style(f"Error listing databases: {e}", fg='red'))
 
 # --- New AI Agent Commands ---
 
