@@ -111,7 +111,10 @@ class MindsDBHandler:
             print(f"Error executing create HackerNews datasource query for '{ds_name}': {str(e)}")
             return False
 
-    def create_knowledge_base(self, kb_name: str, embedding_model_provider: str, embedding_model_name: str, embedding_model_base_url: str = None, reranking_model_provider: str = None, reranking_model_name: str = None, reranking_model_base_url: str = None):
+    def create_knowledge_base(self, kb_name: str, embedding_model_provider: str, embedding_model_name: str, 
+                             embedding_model_base_url: str = None, reranking_model_provider: str = None, 
+                             reranking_model_name: str = None, reranking_model_base_url: str = None,
+                             content_columns: list = None, metadata_columns: list = None, id_column: str = None):
         if not self.project: print("Error: MindsDB connection not established."); return False
 
         if embedding_model_base_url: embedding_model_base_url = embedding_model_base_url.rstrip('/')
@@ -128,6 +131,19 @@ class MindsDBHandler:
             if reranking_model_base_url: reranking_model_config_parts.append(f'"base_url": "{reranking_model_base_url}"')
             reranking_model_config = ", ".join(reranking_model_config_parts)
             query += f", reranking_model = {{ {reranking_model_config} }}"
+        
+        # Add content_columns, metadata_columns, and id_column if specified
+        if content_columns:
+            content_columns_str = str(content_columns).replace("'", '"')  # Convert to JSON format
+            query += f", content_columns = {content_columns_str}"
+        
+        if metadata_columns:
+            metadata_columns_str = str(metadata_columns).replace("'", '"')  # Convert to JSON format
+            query += f", metadata_columns = {metadata_columns_str}"
+        
+        if id_column:
+            query += f", id_column = '{id_column}'"
+        
         query += ";"
         try:
             self.execute_sql(query)
@@ -150,15 +166,16 @@ class MindsDBHandler:
             print("Error: MindsDB connection not established.")
             return False
         
-        # Build SELECT columns list
+        # Build SELECT columns list - content column first, then metadata columns
         select_columns = [content_column]
         if metadata_columns:
             # metadata_columns maps kb_column_name -> source_column_name
             select_columns.extend(metadata_columns.values())
         
         # Remove duplicates and join
-        select_columns_str = ", ".join(sorted(list(set(select_columns))))
-          # Build the query using MindsDB's recommended INSERT INTO ... SELECT syntax
+        select_columns_str = ", ".join(select_columns)  # Keep order: content first, then metadata
+        
+        # Build the query using MindsDB's recommended INSERT INTO ... SELECT syntax
         query = f"INSERT INTO {kb_name} SELECT {select_columns_str} FROM {source_table}"
         
         if order_by:
