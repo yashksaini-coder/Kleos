@@ -144,6 +144,41 @@ class MindsDBHandler:
         try: self.execute_sql(query); print(f"Index creation/rebuild initiated for KB '{kb_name}'."); return True
         except Exception as e: print(f"Error creating index for KB '{kb_name}': {str(e)}"); return False
 
+    def insert_into_knowledge_base_direct(self, kb_name: str, source_table: str, content_column: str, metadata_columns: dict = None, limit: int = None, order_by: str = None):
+        """Insert data directly from a source table into knowledge base using MindsDB's recommended syntax."""
+        if not self.project: 
+            print("Error: MindsDB connection not established.")
+            return False
+        
+        # Build SELECT columns list
+        select_columns = [content_column]
+        if metadata_columns:
+            # metadata_columns maps kb_column_name -> source_column_name
+            select_columns.extend(metadata_columns.values())
+        
+        # Remove duplicates and join
+        select_columns_str = ", ".join(sorted(list(set(select_columns))))
+          # Build the query using MindsDB's recommended INSERT INTO ... SELECT syntax
+        query = f"INSERT INTO {kb_name} SELECT {select_columns_str} FROM {source_table}"
+        
+        if order_by:
+            query += f" ORDER BY {order_by}"
+        if limit and limit > 0:
+            query += f" LIMIT {limit}"
+        query += ";"
+        
+        try:
+            self.execute_sql(query)
+            print(f"Data inserted into KB '{kb_name}' successfully from '{source_table}'.")
+            return True
+        except Exception as e:
+            error_msg = str(e)
+            if "Can't select from" in error_msg and "unknown" in error_msg:
+                print(f"Error: The datasource '{source_table}' was not found. Please create the datasource first.")
+                print(f"You can create a HackerNews datasource using: CREATE DATABASE {source_table.split('.')[0]} WITH ENGINE = 'hackernews';")
+            print(f"Error inserting data into KB '{kb_name}' from '{source_table}': {error_msg}")
+            return False
+
     def insert_into_knowledge_base(self, kb_name: str, data: list[dict], content_column: str, metadata_columns: dict = None):
         if not self.project: print("Error: MindsDB connection not established."); return False
         if not data: print("No data provided for insertion."); return True
@@ -161,7 +196,7 @@ class MindsDBHandler:
                     else: value_tuple_parts.append(f"'{str(val).replace("'", "''")}'")
             values_list_str.append(f"({', '.join(value_tuple_parts)})")
         if not values_list_str: print("No valid data to insert after processing."); return False
-        query = f"INSERT INTO {kb_name} ({', '.join(column_names_for_sql)}) VALUES {', '.join(values_list_str)};"
+        query = f"INSERT INTO {self.project.name}.{kb_name} ({', '.join(column_names_for_sql)}) VALUES {', '.join(values_list_str)};"
         try: self.execute_sql(query); print(f"Data inserted into KB '{kb_name}' successfully."); return True
         except Exception as e: print(f"Error inserting data into KB '{kb_name}': {str(e)}"); return False
 

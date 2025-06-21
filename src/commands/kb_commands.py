@@ -84,26 +84,41 @@ def kb_ingest(ctx, kb_name, from_hackernews_table, hn_datasource, limit, content
         click.echo(click.style("Please specify --from-hackernews <table_name>.", fg='red')); return
     if not content_column:
         click.echo(click.style("Please specify --content-column from the source table.", fg='red')); return
+    
     parsed_metadata_map = None
     if metadata_map:
         try:
             parsed_metadata_map = json.loads(metadata_map)
-            if not isinstance(parsed_metadata_map, dict): raise ValueError("metadata-map must be a JSON dictionary.")
-        except Exception as e: click.echo(click.style(f"Invalid JSON in --metadata-map: {e}", fg='red')); return
-
-    click.echo(f"Ingesting data from '{hn_datasource}.{from_hackernews_table}' into '{kb_name}'...")
+            if not isinstance(parsed_metadata_map, dict): 
+                raise ValueError("metadata-map must be a JSON dictionary.")
+            # Validate that all values are strings (column names)
+            for kb_col, source_col in parsed_metadata_map.items():
+                if not isinstance(source_col, str):
+                    raise ValueError(f"All metadata map values must be source column names (strings). Got: {source_col}")
+        except Exception as e: 
+            click.echo(click.style(f"Invalid JSON in --metadata-map: {e}", fg='red')); return    click.echo(f"Ingesting data from '{hn_datasource}.{from_hackernews_table}' into '{kb_name}'...")
+    
+    # Check if the HackerNews datasource exists, create it if it doesn't
+    if not handler.get_database_custom_check(hn_datasource):
+        click.echo(f"HackerNews datasource '{hn_datasource}' not found. Creating it...")
+        if not handler.create_hackernews_datasource(ds_name=hn_datasource):
+            click.echo(click.style(f"Failed to create HackerNews datasource '{hn_datasource}'.", fg='red'))
+            return
+        click.echo(click.style(f"HackerNews datasource '{hn_datasource}' created successfully.", fg='green'))
+    
+    # Build the source table name
+    source_table = f"{hn_datasource}.{from_hackernews_table}"
+    
+    # Use the new direct insertion method which follows MindsDB's recommended syntax
     try:
-        select_cols_list = [content_column]
-        if parsed_metadata_map: select_cols_list.extend(parsed_metadata_map.values())
-        select_cols_str = ", ".join(sorted(list(set(select_cols_list))))
-        query_fetch_data = f"SELECT {select_cols_str} FROM {hn_datasource}.{from_hackernews_table} ORDER BY id DESC LIMIT {limit}"
-
-        source_data_df = handler.execute_sql(query_fetch_data)
-        if source_data_df is None or source_data_df.empty:
-            click.echo(click.style(f"No data fetched from '{hn_datasource}.{from_hackernews_table}'.", fg='yellow')); return
-
-        source_data_list = source_data_df.to_dict('records')
-        if handler.insert_into_knowledge_base(kb_name, source_data_list, content_column=content_column, metadata_columns=parsed_metadata_map):
+        if handler.insert_into_knowledge_base_direct(
+            kb_name=kb_name, 
+            source_table=source_table,
+            content_column=content_column, 
+            metadata_columns=parsed_metadata_map,
+            limit=limit,
+            order_by="id DESC"
+        ):
             click.echo(click.style(f"Data ingestion into '{kb_name}' initiated successfully.", fg='green'))
         else:
             click.echo(click.style(f"Data ingestion into '{kb_name}' failed.", fg='red'))
@@ -137,6 +152,25 @@ def kb_query(ctx, kb_name, query_text, metadata_filters_str, limit):
             click.echo(click.style("No results found.", fg='yellow'))
     else:
         click.echo(click.style("Failed to query Knowledge Base.", fg='red'))
+
+@kb_group.command('list-databases')
+@click.pass_context
+def kb_list_databases(ctx):
+    """Lists all available databases/datasources in MindsDB."""
+    handler = ctx.obj
+    if not handler or not handler.project:
+        click.echo(click.style("MindsDB connection not available.", fg='red'))
+        return
+    
+    try:
+        databases_df = handler.execute_sql('SHOW DATABASES;')
+        if databases_df is not None and not databases_df.empty:
+            click.echo(click.style("Available databases/datasources:", fg='green'))
+            click.echo(databases_df.to_string(index=False))
+        else:
+            click.echo(click.style("No databases found or query failed.", fg='yellow'))
+    except Exception as e:
+        click.echo(click.style(f"Error listing databases: {e}", fg='red'))
 
 # --- New AI Agent Commands ---
 
