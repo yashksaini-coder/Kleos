@@ -376,16 +376,16 @@ class MindsDBHandler:
             print("Error: MindsDB connection not established.")
             return None
         sanitized_question = question.replace("'", "''")
-        query = f"SELECT response FROM {agent_name} WHERE question = '{sanitized_question}';"
+        query = f"SELECT answer FROM {agent_name} WHERE question = '{sanitized_question}';"
         print(f"Querying agent '{agent_name}' with question: '{question[:100]}...'")
         try:
             results_df = self.execute_sql(query)
             if results_df is not None and not results_df.empty:
-                if 'response' in results_df.columns and len(results_df['response']) > 0:
-                    return results_df['response'].iloc[0]
+                if 'answer' in results_df.columns and len(results_df['answer']) > 0:
+                    return results_df['answer'].iloc[0]
                 else:
-                    print(f"Warning: 'response' column not found in agent output. Columns: {results_df.columns.tolist()}. Returning full first row dict.")
-                    return results_df.iloc[0].to_dict() if not results_df.empty else "Agent returned data but no 'response' column or rows."
+                    print(f"Warning: 'answer' column not found in agent output. Columns: {results_df.columns.tolist()}. Returning full first row dict.")
+                    return results_df.iloc[0].to_dict() if not results_df.empty else "Agent returned data but no 'answer' column or rows."
             elif results_df is not None:
                 print(f"Agent '{agent_name}' returned no results for the question.")
                 return "Agent returned no results."
