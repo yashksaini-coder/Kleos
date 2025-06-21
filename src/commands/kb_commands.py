@@ -142,6 +142,10 @@ def kb_ingest(ctx, kb_name, from_hackernews_table, hn_datasource, limit, content
                 "time": "time",
                 "parent": "parent"
             }
+        elif from_hackernews_table == 'hnstories':
+            parsed_metadata_map = {
+                "story_id": "id"
+            }
         click.echo(f"Using smart defaults for {from_hackernews_table}: content='{content_column}', metadata={list(parsed_metadata_map.keys())}")
 
     click.echo(f"Ingesting data from '{hn_datasource}.{from_hackernews_table}' into '{kb_name}'...")

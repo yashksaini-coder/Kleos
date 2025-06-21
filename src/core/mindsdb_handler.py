@@ -196,26 +196,26 @@ class MindsDBHandler:
             print(f"Error inserting data into KB '{kb_name}' from '{source_table}': {error_msg}")
             return False
 
-    def insert_into_knowledge_base(self, kb_name: str, data: list[dict], content_column: str, metadata_columns: dict = None):
-        if not self.project: print("Error: MindsDB connection not established."); return False
-        if not data: print("No data provided for insertion."); return True
-        column_names_for_sql = [content_column];
-        if metadata_columns: column_names_for_sql.extend(metadata_columns.keys())
-        values_list_str = []
-        for record in data:
-            if content_column not in record: print(f"Warning: Record missing content_column ('{content_column}'). Skipping: {record}"); continue
-            value_tuple_parts = [f"'{str(record[content_column]).replace("'", "''")}'"]
-            if metadata_columns:
-                for kb_meta_col, data_key in metadata_columns.items():
-                    val = record.get(data_key)
-                    if val is None: value_tuple_parts.append("NULL")
-                    elif isinstance(val, (int, float, bool)): value_tuple_parts.append(str(val))
-                    else: value_tuple_parts.append(f"'{str(val).replace("'", "''")}'")
-            values_list_str.append(f"({', '.join(value_tuple_parts)})")
-        if not values_list_str: print("No valid data to insert after processing."); return False
-        query = f"INSERT INTO {self.project.name}.{kb_name} ({', '.join(column_names_for_sql)}) VALUES {', '.join(values_list_str)};"
-        try: self.execute_sql(query); print(f"Data inserted into KB '{kb_name}' successfully."); return True
-        except Exception as e: print(f"Error inserting data into KB '{kb_name}': {str(e)}"); return False
+    # def insert_into_knowledge_base(self, kb_name: str, data: list[dict], content_column: str, metadata_columns: dict = None):
+    #     if not self.project: print("Error: MindsDB connection not established."); return False
+    #     if not data: print("No data provided for insertion."); return True
+    #     column_names_for_sql = [content_column];
+    #     if metadata_columns: column_names_for_sql.extend(metadata_columns.keys())
+    #     values_list_str = []
+    #     for record in data:
+    #         if content_column not in record: print(f"Warning: Record missing content_column ('{content_column}'). Skipping: {record}"); continue
+    #         value_tuple_parts = [f"'{str(record[content_column]).replace("'", "''")}'"]
+    #         if metadata_columns:
+    #             for kb_meta_col, data_key in metadata_columns.items():
+    #                 val = record.get(data_key)
+    #                 if val is None: value_tuple_parts.append("NULL")
+    #                 elif isinstance(val, (int, float, bool)): value_tuple_parts.append(str(val))
+    #                 else: value_tuple_parts.append(f"'{str(val).replace("'", "''")}'")
+    #         values_list_str.append(f"({', '.join(value_tuple_parts)})")
+    #     if not values_list_str: print("No valid data to insert after processing."); return False
+    #     query = f"INSERT INTO {self.project.name}.{kb_name} ({', '.join(column_names_for_sql)}) VALUES {', '.join(values_list_str)};"
+    #     try: self.execute_sql(query); print(f"Data inserted into KB '{kb_name}' successfully."); return True
+    #     except Exception as e: print(f"Error inserting data into KB '{kb_name}': {str(e)}"); return False
 
     def select_from_knowledge_base(self, kb_name: str, query_text: str, metadata_filters: dict = None, limit: int = 5):
         if not self.project: print("Error: MindsDB connection not established."); return None
