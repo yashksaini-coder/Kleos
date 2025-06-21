@@ -218,18 +218,50 @@ class MindsDBHandler:
     #     except Exception as e: print(f"Error inserting data into KB '{kb_name}': {str(e)}"); return False
 
     def select_from_knowledge_base(self, kb_name: str, query_text: str, metadata_filters: dict = None, limit: int = 5):
-        if not self.project: print("Error: MindsDB connection not established."); return None
+        """Select data from a knowledge base using semantic search and optional metadata filters."""
+        if not self.project: 
+            print("Error: MindsDB connection not established.")
+            return None
+        
+        print(f"Querying KB '{kb_name}' for: '{query_text}' with filters: {metadata_filters}")
+        
+        # For MindsDB knowledge bases, use the search_text parameter in WHERE clause
         sanitized_query_text = query_text.replace("'", "''")
-        where_clauses = [f"content LIKE '{sanitized_query_text}'"]
+        where_clauses = [f"search_text = '{sanitized_query_text}'"]
+        
         if metadata_filters:
             for col, val in metadata_filters.items():
-                sanitized_val = str(val).replace("'", "''") if isinstance(val, str) else val
-                where_clauses.append(f"{col} = '{sanitized_val}'" if isinstance(val, str) else f"{col} = {val}")
+                if isinstance(val, dict):
+                    # Handle MongoDB-style operators like {"$gt": 50}
+                    for op, op_val in val.items():
+                        if op == "$gt":
+                            where_clauses.append(f"{col} > {op_val}")
+                        elif op == "$gte":
+                            where_clauses.append(f"{col} >= {op_val}")
+                        elif op == "$lt":
+                            where_clauses.append(f"{col} < {op_val}")
+                        elif op == "$lte":
+                            where_clauses.append(f"{col} <= {op_val}")
+                        else:
+                            print(f"Warning: Unsupported operator '{op}' for column '{col}'. Skipping.")
+                else:
+                    # Simple equality filter
+                    sanitized_val = str(val).replace("'", "''") if isinstance(val, str) else val
+                    where_clauses.append(f"{col} = '{sanitized_val}'" if isinstance(val, str) else f"{col} = {val}")
+        
+        # Use search_text for semantic search in knowledge bases
         query = f"SELECT * FROM {kb_name} WHERE {' AND '.join(where_clauses)}"
-        if limit > 0: query += f" LIMIT {limit}"
-        query += ";";
-        try: results_df = self.execute_sql(query); print(f"Query from KB '{kb_name}' executed."); return results_df
-        except Exception as e: print(f"Error querying KB '{kb_name}': {str(e)}"); return None
+        if limit > 0: 
+            query += f" LIMIT {limit}"
+        query += ";"
+        
+        try: 
+            results_df = self.execute_sql(query)
+            print(f"Semantic search on KB '{kb_name}' executed successfully.")
+            return results_df
+        except Exception as e: 
+            print(f"Error performing semantic search on KB '{kb_name}': {str(e)}")
+            return None
 
     def create_mindsdb_job(self, job_name: str, kb_name: str, hn_datasource: str, hn_table_name: str, schedule_interval: str = "every 1 day"):
         if not self.project: print("Error: MindsDB connection not established."); return False
