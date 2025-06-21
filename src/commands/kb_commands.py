@@ -120,7 +120,7 @@ def kb_ingest(ctx, kb_name, from_hackernews_table, hn_datasource, limit, content
         try:
             parsed_metadata_map = json.loads(metadata_map)
             if not isinstance(parsed_metadata_map, dict): 
-                raise ValueError("metadata-map must be a JSON dictionary.")
+                click.echo(click.style("metadata-map must be a JSON dictionary.", fg='red')); return
             # Validate that all values are strings (column names)
             for kb_col, source_col in parsed_metadata_map.items():
                 if not isinstance(source_col, str):
