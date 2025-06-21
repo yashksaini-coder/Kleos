@@ -134,11 +134,11 @@ class MindsDBHandler:
         
         # Add content_columns, metadata_columns, and id_column if specified
         if content_columns:
-            content_columns_str = str(content_columns).replace("'", '"')  # Convert to JSON format
+            content_columns_str = json.dumps(content_columns)  # Convert to JSON format
             query += f", content_columns = {content_columns_str}"
         
         if metadata_columns:
-            metadata_columns_str = str(metadata_columns).replace("'", '"')  # Convert to JSON format
+            metadata_columns_str = json.dumps(metadata_columns)  # Convert to JSON format
             query += f", metadata_columns = {metadata_columns_str}"
         
         if id_column:
