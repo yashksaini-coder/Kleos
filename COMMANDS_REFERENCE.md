@@ -11,15 +11,21 @@ When passing complex parameters as JSON strings via options like `--metadata-map
 - Escape all inner double quotes with a backslash (`\"`)
 - Example: `--metadata-map "{\"key\":\"value\"}"`
 
-### PowerShell, Bash, Zsh
+### PowerShell
+- Option 1: Use single quotes and escape inner double quotes with backslash
+- Example: `--metadata-map '{\"key\":\"value\"}'`
+- Option 2: Use double quotes and escape with backticks
+- Example: `--metadata-map "{`"key`":`"value`"}"`
+
+### Bash, Zsh (Linux/macOS)
 - Enclose the JSON string in single quotes (`'`)
 - Example: `--metadata-map '{"key":"value"}'`
 
 ---
 
-## Setup Commands
+# Setup Commands
 
-### `setup hackernews` - Setup HackerNews Datasource
+## `setup hackernews` - Setup HackerNews Datasource
 
 Creates a HackerNews datasource connection in MindsDB.
 
@@ -38,9 +44,9 @@ python main.py setup hackernews --name my_hackernews_source
 
 ---
 
-## Knowledge Base Commands
+# Knowledge Base Commands
 
-### `kb create` - Create a new Knowledge Base
+## `kb create` - Create a new Knowledge Base
 
 Creates a new Knowledge Base with specified embedding and reranking models.
 
@@ -71,7 +77,7 @@ python main.py kb create hn_stories_kb --embedding-model nomic-embed-text --rera
 python main.py kb create hn_comments_kb --embedding-model nomic-embed-text --reranking-model llama3 --content-columns "text" --metadata-columns "id,by,parent,time" --id-column id
 ```
 
-### `kb ingest` - Ingest data into a Knowledge Base
+## `kb ingest` - Ingest data into a Knowledge Base
 
 Ingests data from a HackerNews table into an existing Knowledge Base. The command automatically detects sensible defaults for HackerNews tables and can auto-create the datasource if needed.
 
@@ -113,7 +119,7 @@ python main.py kb ingest comment_kb --from-hackernews comments --metadata-map '{
 
 **Windows Command Prompt:**
 ```cmd
-REM Simple ingestion with auto-detected columns
+Simple ingestion with auto-detected columns
 python main.py kb ingest my_documents_kb --from-hackernews stories --limit 50
 
 REM Custom content columns only
@@ -126,7 +132,7 @@ REM Ingest comments with custom mapping
 python main.py kb ingest comment_kb --from-hackernews comments --metadata-map "{\"comment_id\":\"id\", \"author\":\"by\", \"parent_story\":\"parent\"}" --limit 200
 ```
 
-### `kb query` - Query a Knowledge Base
+## `kb query` - Query a Knowledge Base
 
 Queries a Knowledge Base for relevant content using semantic search.
 
@@ -315,6 +321,10 @@ python main.py job create <job_name> --model <model> --input <input_file> [optio
 ### Common Issues
 
 1. **JSON parsing errors**: Usually caused by incorrect quoting/escaping. Check the platform-specific examples above.
+   - **PowerShell**: Use `'{\"key\":\"value\"}'` or `"{`"key`":`"value`"}"`
+   - **Command Prompt**: Use `"{\"key\":\"value\"}"`
+   - **Bash/Zsh**: Use `'{"key":"value"}'`
+   - **Error "Expecting value: line 1 column 1"**: Your JSON string is empty or malformed due to shell parsing issues
 
 2. **Table not found**: Ensure the HackerNews datasource is set up and the table name is correct (usually 'stories' or 'comments').
 

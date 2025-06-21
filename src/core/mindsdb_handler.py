@@ -222,12 +222,13 @@ class MindsDBHandler:
         if not self.project: 
             print("Error: MindsDB connection not established.")
             return None
-        
-        print(f"Querying KB '{kb_name}' for: '{query_text}' with filters: {metadata_filters}")
-        
-        # For MindsDB knowledge bases, use the search_text parameter in WHERE clause
+
+        print(f"Querying KB '{self.project.name}.{kb_name}' for: '{query_text}' with filters: {metadata_filters}")
+
+        # For MindsDB knowledge bases, use the correct 'content' parameter in WHERE clause
+        # According to MindsDB docs: WHERE content = 'search text' for semantic search
         sanitized_query_text = query_text.replace("'", "''")
-        where_clauses = [f"search_text = '{sanitized_query_text}'"]
+        where_clauses = [f"content = '{sanitized_query_text}'"]
         
         if metadata_filters:
             for col, val in metadata_filters.items():
@@ -249,7 +250,7 @@ class MindsDBHandler:
                     sanitized_val = str(val).replace("'", "''") if isinstance(val, str) else val
                     where_clauses.append(f"{col} = '{sanitized_val}'" if isinstance(val, str) else f"{col} = {val}")
         
-        # Use search_text for semantic search in knowledge bases
+        # Use correct MindsDB Knowledge Base syntax: WHERE content = 'search text'
         query = f"SELECT * FROM {kb_name} WHERE {' AND '.join(where_clauses)}"
         if limit > 0: 
             query += f" LIMIT {limit}"
