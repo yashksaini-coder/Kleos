@@ -22,8 +22,3 @@ def setup_hackernews(ctx, name):
         click.echo(click.style(f"HackerNews datasource '{name}' is ready.", fg='green'))
     else:
         click.echo(click.style(f"Failed to create HackerNews datasource '{name}'. Check logs for details.", fg='red'))
-
-# To make this command group available, it needs to be added to the main cli object in main.py
-# Example in main.py:
-# from .commands import setup_commands
-# cli.add_command(setup_commands.setup_group)

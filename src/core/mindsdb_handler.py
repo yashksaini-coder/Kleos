@@ -52,6 +52,19 @@ class MindsDBHandler:
             query_result = self.project.query(query)
             print("Query executed successfully via SDK.")
             return query_result.fetch()
+        except RuntimeError as e:
+            if "Event loop is closed" in str(e):
+                # Retry once if event loop is closed
+                print("Event loop closed, retrying query...")
+                try:
+                    query_result = self.project.query(query)
+                    print("Query executed successfully via SDK on retry.")
+                    return query_result.fetch()
+                except Exception as retry_e:
+                    print(f"MindsDB API Error on retry '{query}': {str(retry_e)}")
+                    raise
+            else:
+                raise
         except Exception as e:
             error_details = str(e)
             print(f"MindsDB API Error executing query '{query}': {error_details}")
