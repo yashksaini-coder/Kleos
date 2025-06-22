@@ -4,6 +4,7 @@
 - [KBs Data Stored](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#data-stored-in-knowledge-base)
 - [KBs Semantic Search](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#semantic-search)
 - [KBs Metadata Filtering](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#metadata-filtering)
+- [KBs Index Creation](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#create-index-on-knowledge-base-syntax)
 
 ### AI Tables
 - [What are Generative AI Tables?](https://docs.mindsdb.com/generative-ai-tables#what-are-generative-ai-tables)

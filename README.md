@@ -4,9 +4,20 @@
 
 This project provides a powerful Command Line Interface (CLI) for interacting with MindsDB, with a special focus on its Knowledge Base features and AI Agent integration. It also includes a suite of scripts for performance benchmarking, stress testing, and evaluating MindsDB's reranking capabilities.
 
-**Detailed Documentation:**
-*   For a comprehensive guide to all CLI commands, options, and examples, please see [**COMMANDS_REFERENCE.md**](./COMMANDS_REFERENCE.md).
-*   For an in-depth article covering project architecture, workflow, and code explanations, refer to [**ARTICLE.md**](./ARTICLE.md).
+## Key Features
+
+The project's primary interaction has:
+
+- [X] [Creating Knowledge Bases - CREATE KNOWLEDGE_BASE](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#create-knowledge-base-syntax)
+- [X] [Data Ingestion - INGEST DATA](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#insert-into-syntax)
+- [X] [Retrieving Relevant Data - SELECT FROM](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#select-from-kb-syntax)
+- [X] [Creating Indexes - CREATE INDEX ON](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#create-index-on-knowledge-base-syntax)
+
+- [X] [Using Metadata Columns - METADATA COLUMNS](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#metadata-columns)
+- [X] [Integrating - CREATE AGENT](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#create-agent)
+- [ ] [Integrating - JOBS](https://docs.mindsdb.com/mindsdb_sql/sql/create/jobs)
+- [X] [Integrating - AI Tables](https://docs.mindsdb.com/generative-ai-tables#what-are-generative-ai-tables)
+
 
 ## Features
 
@@ -37,14 +48,19 @@ This project provides a powerful Command Line Interface (CLI) for interacting wi
 
 1.  **Clone the repository (if you haven't already):**
     ```bash
-    git clone <repository_url>
-    cd <repository_directory>
+    git clone https://github.com/yashksaini-coder/Kleos
+    cd Kleos
     ```
 
 2.  **Create a virtual environment (recommended):**
     ```bash
     python -m venv venv
     source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+    OR 
+
+    uv venv
+    .venv/bin/activate  # On Windows: uv .venv\Scripts\activate
     ```
 
 3.  **Install dependencies:**
@@ -76,11 +92,32 @@ The application requires configuration for connecting to MindsDB and for API key
     OLLAMA_BASE_URL="http://127.0.0.1:11434"
     # Add other variables as needed
     ```
-    `python-dotenv` (in `requirements.txt`) will load these variables.
+
+3.  **Install MindsDB (if not already installed):**
+    If you haven't installed MindsDB yet, you can do so via pip:
+    ```bash
+    pip install mindsdb
+    ```
+
+    Or, if you prefer to use Docker, you can run MindsDB using the official Docker image:
+    
+    ```bash
+    docker run -p 47334:47334 mindsdb/mindsdb
+    ```
+
+4.  **Verify MindsDB is running:**
+    Ensure your MindsDB instance is up and running. You can check this by accessing the MindsDB UI in your web browser at `http://127.0.0.1:47334/`.
+
+5.  **(Optional) Install Ollama models:**
+    If you plan to use Ollama for embeddings or reranking, ensure the required models are installed:
+    ```bash
+    ollama pull nomic-embed-text
+    ollama pull llama3
+    ```
 
 ## 2. Usage
 
-### 2.1. CLI (`main.py`)
+### 2.1. Kleos CLI (`main.py`)
 
 The main CLI application is run using `python main.py`.
 
@@ -234,7 +271,10 @@ A `Dockerfile` is provided to build and run the CLI application.
 
 ## 4. Project Internals & Development
 
-For a detailed understanding of the project's architecture, code structure, and workflows, please see [**ARTICLE.md**](./ARTICLE.md).
+**Detailed Documentation:**
+*   For a comprehensive guide to all CLI commands, options, and examples, please see [**COMMANDS_REFERENCE.md**](./COMMANDS_REFERENCE.md).
+
+*   For an in-depth article covering project architecture, workflow, and code explanations, refer to [**ARTICLE.md**](./ARTICLE.md).
 
 The core logic for MindsDB interactions is encapsulated in `src/core/mindsdb_handler.py`.
 CLI commands are defined in modules within `src/commands/`.

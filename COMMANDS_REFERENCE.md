@@ -260,14 +260,7 @@ python main.py kb query-agent <agent_name> "<question>"
 **Examples:**
 ```bash
 # Basic agent query
-python main.py kb query-agent my_kb_agent "What are the main topics discussed in the articles?"
-
-# Query HackerNews expert agent
-python main.py kb query-agent hn_expert "What are the most popular programming languages mentioned in recent stories?"
-
-# Complex analytical query
-python main.py kb query-agent research_assistant "Summarize the key trends in AI research from the past year and identify emerging themes."
-```
+python main.py kb query-agent my_agent "What is the total number of stories ?"
 
 ---
 
