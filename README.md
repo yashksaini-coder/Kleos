@@ -4,21 +4,6 @@
 
 This project provides a powerful Command Line Interface (CLI) for interacting with MindsDB, with a special focus on its Knowledge Base features and AI Agent integration. It also includes a suite of scripts for performance benchmarking, stress testing, and evaluating MindsDB's reranking capabilities.
 
-## Key Features
-
-The project's primary interaction has:
-
-- [X] [Creating Knowledge Bases - CREATE KNOWLEDGE_BASE](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#create-knowledge-base-syntax)
-- [X] [Data Ingestion - INGEST DATA](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#insert-into-syntax)
-- [X] [Retrieving Relevant Data - SELECT FROM](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#select-from-kb-syntax)
-- [X] [Creating Indexes - CREATE INDEX ON](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#create-index-on-knowledge-base-syntax)
-
-- [X] [Using Metadata Columns - METADATA COLUMNS](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#metadata-columns)
-- [X] [Integrating - CREATE AGENT](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#create-agent)
-- [ ] [Integrating - JOBS](https://docs.mindsdb.com/mindsdb_sql/sql/create/jobs)
-- [X] [Integrating - AI Tables](https://docs.mindsdb.com/generative-ai-tables#what-are-generative-ai-tables)
-
-
 ## Features
 
 *   **CLI (`main.py`)**:
@@ -28,10 +13,12 @@ The project's primary interaction has:
     *   Create and query AI Agents linked to Knowledge Bases (e.g., using Google Gemini).
     *   Automate ingestion using MindsDB Jobs.
     *   Create and query general AI models/tables (e.g., using Google Gemini for classification).
+
 *   **Reporting Scripts (`src/report_scripts/`)**:
     *   **Performance Benchmarking**: Measure ingestion times and query latencies.
     *   **Stress Testing**: Test system stability under heavy load.
     *   **Reranking Evaluation**: Compare search results with and without reranking.
+
 *   **Docker Support**: Includes a `Dockerfile` to build and run the CLI tool in a containerized environment.
 
 ## 1. Setup and Installation
@@ -66,6 +53,10 @@ The project's primary interaction has:
 3.  **Install dependencies:**
     ```bash
     pip install -r requirements.txt
+
+    OR 
+
+    uv pip install -r requirements.txt
     ```
 
 ### 1.3. Configuration

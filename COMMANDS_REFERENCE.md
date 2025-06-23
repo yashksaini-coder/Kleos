@@ -122,13 +122,13 @@ python main.py kb ingest comment_kb --from-hackernews comments --metadata-map '{
 Simple ingestion with auto-detected columns
 python main.py kb ingest my_documents_kb --from-hackernews stories --limit 50
 
-REM Custom content columns only
+RUN Custom content columns only
 python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --limit 100
 
-REM Custom content and metadata mapping
+RUN Custom content and metadata mapping
 python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --metadata-map "{\"story_id\":\"id\", \"author\":\"by\", \"score\":\"score\"}" --limit 100
 
-REM Ingest comments with custom mapping
+RUN Ingest comments with custom mapping
 python main.py kb ingest comment_kb --from-hackernews comments --metadata-map "{\"comment_id\":\"id\", \"author\":\"by\", \"parent_story\":\"parent\"}" --limit 200
 ```
 
@@ -166,16 +166,16 @@ python main.py kb query hn_stories_kb "startups and funding" --metadata-filter '
 
 **Windows Command Prompt:**
 ```cmd
-REM Basic query
+RUN Basic query
 python main.py kb query my_documents_kb "latest trends in AI"
 
-REM Query with result limit
+RUN Query with result limit
 python main.py kb query my_documents_kb "Python programming tips" --limit 5
 
-REM Query with metadata filter
+RUN Query with metadata filter
 python main.py kb query my_documents_kb "machine learning" --metadata-filter "{\"author\":\"tech_expert\", \"score\":{\"$gt\":50}}"
 
-REM Search specific topics in HackerNews stories
+RUN Search specific topics in HackerNews stories
 python main.py kb query hn_stories_kb "startups and funding" --metadata-filter "{\"score\":{\"$gte\":100}}"
 ```
 
@@ -234,13 +234,17 @@ python main.py kb create-agent research_assistant research_kb --model-name gpt-4
 
 **Windows Command Prompt:**
 ```cmd
-REM Basic agent creation
+RUN Basic agent creation
 python main.py kb create-agent my_kb_agent my_documents_kb --model-name gemini-pro
+```
 
-REM Agent with custom temperature and prompt
+```cmd
+RUN Agent with custom temperature and prompt
 python main.py kb create-agent hn_expert hn_stories_kb --model-name gemini-pro --agent-params "{\"temperature\":0.2, \"prompt_template\":\"You are an expert analyst of HackerNews content. Answer questions based on the provided articles.\"}"
+```
 
-REM Agent with specific API configuration
+```cmd
+RUN Agent with specific API configuration
 python main.py kb create-agent research_assistant research_kb --model-name gpt-4 --agent-params "{\"temperature\":0.1, \"max_tokens\":500, \"api_key\":\"your-openai-key\"}"
 ```
 

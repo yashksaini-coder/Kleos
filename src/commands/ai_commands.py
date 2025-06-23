@@ -15,8 +15,7 @@ def ai_group():
 @click.option('--prompt-template', default=None, help="Default prompt template for the model. E.g., 'Classify: {{text}} Categories: [A,B,C]'")
 # The handler's create_ai_table method takes: model_name, target_column_to_predict, source_table_for_training,
 # text_feature_column, gemini_api_key, additional_using_params.
-# For a general Gemini setup not tied to a specific training table initially, some of these are less relevant.
-# The CLI command should simplify this for the user for the "create a generic classifier" use case.
+
 @click.pass_context
 def ai_create_classifier(ctx, model_name, engine, mode, prompt_template):
     """
