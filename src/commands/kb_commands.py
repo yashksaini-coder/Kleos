@@ -247,47 +247,71 @@ def kb_list_databases(ctx):
 
 @kb_group.command('create-agent')
 @click.argument('agent_name')
-@click.argument('kb_name')
-@click.option('--model-provider', default='google', show_default=True, help="LLM provider for the agent (e.g., 'google', 'ollama', 'openai').")
-@click.option('--model-name', default='gemini-pro', show_default=True, help="LLM model name for the agent (e.g., 'gemini-pro', 'llama3').")
-@click.option('--agent-params', 'agent_params_str', default=None, help="JSON string of additional parameters for the agent's USING clause. E.g., '{\"temperature\": 0.5, \"api_key\": \"your_google_api_key\"}'.")
+@click.option('--model-name', required=True, help="LLM model name for the agent (e.g., 'gemini-1.5-flash', 'llama3').")
+@click.option('--include-knowledge-bases', required=True, help="Comma-separated list of Knowledge Base names to include.")
+@click.option('--google-api-key', default=None, help="Google API key, if required by the model.")
+@click.option('--include-tables', default=None, help="Comma-separated list of table names to include (e.g., 'datasource.table1,ds.table2').")
+@click.option('--prompt-template', default=None, help="Custom prompt template for the agent. Use triple quotes for multi-line.")
+@click.option('--other-params', 'other_params_str', default=None, help="JSON string of other parameters for the agent's USING clause (e.g., '{\"temperature\": 0.7}').")
 @click.pass_context
-def kb_create_agent(ctx, agent_name, kb_name, model_provider, model_name, agent_params_str):
+def kb_create_agent(ctx, agent_name, model_name, include_knowledge_bases,
+                    google_api_key, include_tables, prompt_template, other_params_str):
     """
-    Creates an AI Agent linked to a Knowledge Base.
-    The agent uses a specified LLM (defaults to Google Gemini-Pro).
-    If using Google Gemini, ensure GOOGLE_GEMINI_API_KEY is in config/env or pass 'api_key' in --agent-params.
+    Creates an AI Agent with specified model, knowledge bases, and other configurations.
     """
     handler = ctx.obj
+    # Ensure connection
     if not handler or not handler.project:
-        click.echo(click.style("MindsDB connection not available.", fg='red'))
+        if not handler.connect() or not handler.project:
+            click.echo(click.style("MindsDB connection failed. Please ensure MindsDB is running and accessible.", fg='red'))
+            return
+
+    # Parse comma-separated strings into lists
+    include_kb_list = [kb.strip() for kb in include_knowledge_bases.split(',')] if include_knowledge_bases else []
+    if not include_kb_list:
+        click.echo(click.style("Error: --include-knowledge-bases cannot be empty.", fg='red'))
         return
 
-    parsed_agent_params = {} # Default to empty dict
-    if agent_params_str:
+    include_tables_list = [table.strip() for table in include_tables.split(',')] if include_tables else None
+
+    parsed_other_params = {}
+    if other_params_str:
         try:
-            parsed_agent_params = json.loads(agent_params_str)
-            if not isinstance(parsed_agent_params, dict):
-                raise ValueError("Agent params must be a valid JSON dictionary string.")
+            parsed_other_params = json.loads(other_params_str)
+            if not isinstance(parsed_other_params, dict):
+                raise ValueError("--other-params must be a valid JSON dictionary string.")
         except json.JSONDecodeError as e:
-            click.echo(click.style(f"Invalid JSON in --agent-params: {e}", fg='red'))
+            click.echo(click.style(f"Invalid JSON in --other-params: {e}", fg='red'))
             return
-        except ValueError as e:
+        except ValueError as e: # Catches custom error
             click.echo(click.style(str(e), fg='red'))
             return
 
-    click.echo(f"Attempting to create agent '{agent_name}' linked to KB '{kb_name}' using model '{model_provider}/{model_name}'...")
+    click.echo(f"Attempting to create agent '{agent_name}' using model '{model_name}'...")
+    click.echo(f"Including knowledge bases: {include_kb_list}")
+    if include_tables_list:
+        click.echo(f"Including tables: {include_tables_list}")
+    if google_api_key:
+        click.echo("Using provided Google API Key.")
+    if prompt_template:
+        click.echo(f"Using custom prompt template (first 50 chars): {prompt_template[:50]}...")
+    if parsed_other_params:
+        click.echo(f"Other parameters: {parsed_other_params}")
 
     if handler.create_kb_agent(
         agent_name=agent_name,
-        kb_name=kb_name,
-        model_provider=model_provider,
         model_name=model_name,
-        agent_params=parsed_agent_params
+        include_knowledge_bases=include_kb_list,
+        google_api_key=google_api_key,
+        include_tables=include_tables_list,
+        prompt_template=prompt_template,
+        other_params=parsed_other_params
     ):
-        click.echo(click.style(f"Agent '{agent_name}' created successfully or already exists.", fg='green'))
+        click.echo(click.style(f"Agent '{agent_name}' creation command sent successfully.", fg='green'))
+        click.echo(click.style("Note: Agent creation is asynchronous. Check MindsDB logs or status to confirm.", fg='bright_black'))
+
     else:
-        click.echo(click.style(f"Failed to create agent '{agent_name}'. Check logs for details.", fg='red'))
+        click.echo(click.style(f"Failed to send command to create agent '{agent_name}'. Check logs for details.", fg='red'))
 
 @kb_group.command('query-agent')
 @click.argument('agent_name')

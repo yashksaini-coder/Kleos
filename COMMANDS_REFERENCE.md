@@ -263,70 +263,71 @@ python main.py kb query hn_stories_kb "startups and funding" --metadata-filter "
 ```
 
 
-### `kb create-agent` - Create an AI Agent for a Knowledge Base
+### `kb create-agent` - Create an AI Agent
 
-Creates an AI agent that can answer questions using a specific Knowledge Base as its knowledge source.
+Creates an AI agent with a specified model, linked to knowledge bases and/or tables, and configured with a prompt template.
 
 **Usage:**
 ```bash
-python main.py kb create-agent <agent_name> <kb_name> --model-name <model> [options]
+python main.py kb create-agent <agent_name> [options]
 ```
 
-**Arguments:**
-- `<agent_name>`: Name for the new agent
-- `<kb_name>`: Name of the Knowledge Base to use as knowledge source
-- `--model-name`: AI model to use (e.g., gemini-pro, gpt-4, etc.)
-- `--agent-params`: JSON parameters for the agent configuration (optional)
+**Required Arguments:**
+- `<agent_name>`: Name for the new agent.
+- `--model-name <model>`: LLM model to use for the agent (e.g., `gemini-1.5-flash`, `llama3`). This is a **required** option.
+- `--include-knowledge-bases <kb_names>`: Comma-separated list of Knowledge Base names to include (e.g., `my_kb1,another_kb`). This is a **required** option.
 
-**Common Agent Parameters:**
-- `temperature`: Controls randomness (0.0-1.0)
-- `prompt_template`: Custom prompt template for the agent
-- `max_tokens`: Maximum response length
-- `api_key`: Model-specific API key (if not in environment)
+**Optional Arguments:**
+- `--google-api-key <key>`: Your Google API key, if using a Google model and not set globally in MindsDB or via environment/config.
+- `--include-tables <table_names>`: Comma-separated list of table names to include, in `datasource.tablename` format (e.g., `hackernews.stories,myds.comments`).
+- `--prompt-template <template_string>`: Custom prompt template for the agent. Enclose multi-line templates in quotes appropriate for your shell.
+- `--other-params <json_string>`: JSON string for other parameters to pass to the agent's `USING` clause (e.g., `'{"temperature": 0.7, "max_tokens": 300}'`). Refer to MindsDB documentation for model-specific parameters.
 
 **Examples:**
 
-**PowerShell/Bash/Zsh:**
-```bash
-# Basic agent creation
-python main.py kb create-agent my_kb_agent my_documents_kb --model-name gemini-pro
+1.  **Agent using Google Gemini, one KB, one table, and a custom prompt:**
+    ```bash
+    # PowerShell/Bash/Zsh
+    python main.py kb create-agent my_hn_analyzer \
+        --model-name gemini-1.5-flash \
+        --include-knowledge-bases "hn_kb_main" \
+        --include-tables "hackernews_db.stories" \
+        --google-api-key "YOUR_GOOGLE_API_KEY" \
+        --prompt-template "You are an expert Hacker News analyst. Based on the story title and text from hackernews_db.stories and relevant info from hn_kb_main, answer the question." \
+        --other-params '{"temperature":0.3}'
+    ```
+    ```cmd
+    REM Windows Command Prompt (long commands might need care with line breaks using )
+    python main.py kb create-agent my_hn_analyzer 
+        --model-name gemini-1.5-flash 
+        --include-knowledge-bases "hn_kb_main" 
+        --include-tables "hackernews_db.stories" 
+        --google-api-key "YOUR_GOOGLE_API_KEY" 
+        --prompt-template "You are an expert Hacker News analyst. Based on the story title and text from hackernews_db.stories and relevant info from hn_kb_main, answer the question." 
+        --other-params "{\"temperature\":0.3}"
+    ```
 
-```sql
-CREATE AGENT hn_agent
-USING
-    model = 'gemini-2.0-flash',
-    google_api_key = 'AIzaSyAG3h8el_Qf7iLeoXAMQxUPMAm6Fqg5jy4',
-    include_knowledge_bases= ['hn_kb_fixed'],
-    include_tables=['hackernews.hnstories'],
-    prompt_template='
-        mindsdb.hackernews.hnstories stores data from the hackernews site, basically the title, text, score descendants and id of the story.
-        ';
-```
+2.  **Agent using an Ollama model (e.g., Llama3), multiple KBs, no extra tables:**
+    *(Assumes Ollama model `llama3` is available to MindsDB)*
+    ```bash
+    python main.py kb create-agent ollama_kb_chat \
+        --model-name llama3 \
+        --include-knowledge-bases "product_docs_kb,faq_kb" \
+        --prompt-template "Answer questions based on the provided product documentation and FAQs."
+    ```
 
-# Agent with custom temperature and prompt
+3.  **Simple agent with only required fields (model and KBs):**
+    ```bash
+    python main.py kb create-agent basic_agent \
+        --model-name gemini-pro \
+        --include-knowledge-bases "general_kb" \
+        --google-api-key "YOUR_GOOGLE_KEY"
+        # Assuming GOOGLE_GEMINI_API_KEY is also in config or GOOGLE_API_KEY is globally set in MindsDB if not provided
+    ```
 
-```bash
-python main.py kb create-agent hn_expert hn_stories_kb --model-name gemini-pro --agent-params '{"temperature":0.2, "prompt_template":"You are an expert analyst of HackerNews content. Answer questions based on the provided articles."}'
-
-# Agent with specific API configuration
-python main.py kb create-agent research_assistant research_kb --model-name gpt-4 --agent-params '{"temperature":0.1, "max_tokens":500, "api_key":"your-openai-key"}'
-```
-
-**Windows Command Prompt:**
-```cmd
-RUN Basic agent creation
-python main.py kb create-agent my_kb_agent my_documents_kb --model-name gemini-pro
-```
-
-```cmd
-RUN Agent with custom temperature and prompt
-python main.py kb create-agent hn_expert hn_stories_kb --model-name gemini-pro --agent-params "{\"temperature\":0.2, \"prompt_template\":\"You are an expert analyst of HackerNews content. Answer questions based on the provided articles.\"}"
-```
-
-```cmd
-RUN Agent with specific API configuration
-python main.py kb create-agent research_assistant research_kb --model-name gpt-4 --agent-params "{\"temperature\":0.1, \"max_tokens\":500, \"api_key\":\"your-openai-key\"}"
-```
+**Note on API Keys:**
+- For Google models, provide `--google-api-key` or ensure `GOOGLE_GEMINI_API_KEY` is in your `config.py` or environment variables if the agent handler in MindsDB expects it. The current implementation prioritizes the CLI flag, then the config.
+- For other models (e.g., OpenAI hosted via MindsDB), API keys might be configured directly in MindsDB when setting up the ML_ENGINE or passed via `--other-params` if the specific model integration supports it in the `USING` clause.
 
 ### `kb query-agent` - Query an AI Agent
 
