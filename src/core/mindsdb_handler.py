@@ -166,14 +166,10 @@ class MindsDBHandler:
 
         # Add content_columns, metadata_columns, and id_column if specified
         if content_columns:
-            # Ensure content_columns is a list of strings, then format for SQL
+            # Ensure content_columns is a list of strings, then format for SQL as an array
             if isinstance(content_columns, list) and all(isinstance(col, str) for col in content_columns):
-                 # MindsDB expects content_columns = ['col1', 'col2'] or content_columns = 'col1'
-                if len(content_columns) == 1:
-                    using_clauses.append(f"content_columns = '{content_columns[0]}'")
-                else:
-                    content_columns_sql_array = "[" + ", ".join([f"'{col}'" for col in content_columns]) + "]"
-                    using_clauses.append(f"content_columns = {content_columns_sql_array}")
+                content_columns_sql_array = "[" + ", ".join([f"'{col}'" for col in content_columns]) + "]"
+                using_clauses.append(f"content_columns = {content_columns_sql_array}")
             else:
                 print("Warning: content_columns should be a list of strings. Skipping.")
         

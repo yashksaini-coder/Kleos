@@ -42,6 +42,24 @@ python main.py setup hackernews --name <datasource_name>
 python main.py setup hackernews --name my_hackernews_source
 ```
 
+### `kb list-databases` - List available databases
+
+Lists all databases available in the current MindsDB instance.
+
+**Usage:**
+```bash
+python main.py kb list-databases
+```
+
+**Example Output:**
+```
+Available databases:
+- information_schema
+- mindsdb
+- hackernews_db
+- my_custom_datasource
+```
+
 ---
 
 # Knowledge Base Commands
@@ -223,7 +241,7 @@ python main.py kb query my_documents_kb "latest trends in AI"
 python main.py kb query my_documents_kb "Python programming tips" --limit 5
 
 # Query with metadata filter
-python main.py kb query my_documents_kb "machine learning" --metadata-filter '{"author":"tech_expert", "score":{"$gt":50}}'
+python main.py kb query my_documents_kb "machine learning" --metadata-filter '{"author":"tech_expert", "score":50}}'
 
 # Search specific topics in HackerNews stories
 python main.py kb query hn_stories_kb "startups and funding" --metadata-filter '{"score":{"$gte":100}}'
@@ -238,29 +256,12 @@ RUN Query with result limit
 python main.py kb query my_documents_kb "Python programming tips" --limit 5
 
 RUN Query with metadata filter
-python main.py kb query my_documents_kb "machine learning" --metadata-filter "{\"author\":\"tech_expert\", \"score\":{\"$gt\":50}}"
+python main.py kb query my_documents_kb "machine learning" --metadata-filter "{\"author\":\"tech_expert\", \"score\":50}"
 
 RUN Search specific topics in HackerNews stories
-python main.py kb query hn_stories_kb "startups and funding" --metadata-filter "{\"score\":{\"$gte\":100}}"
+python main.py kb query hn_stories_kb "startups and funding" --metadata-filter "{\"score\":100}"
 ```
 
-### `kb list-databases` - List available databases
-
-Lists all databases available in the current MindsDB instance.
-
-**Usage:**
-```bash
-python main.py kb list-databases
-```
-
-**Example Output:**
-```
-Available databases:
-- information_schema
-- mindsdb
-- hackernews_db
-- my_custom_datasource
-```
 
 ### `kb create-agent` - Create an AI Agent for a Knowledge Base
 
@@ -290,7 +291,21 @@ python main.py kb create-agent <agent_name> <kb_name> --model-name <model> [opti
 # Basic agent creation
 python main.py kb create-agent my_kb_agent my_documents_kb --model-name gemini-pro
 
+```sql
+CREATE AGENT hn_agent
+USING
+    model = 'gemini-2.0-flash',
+    google_api_key = 'AIzaSyAG3h8el_Qf7iLeoXAMQxUPMAm6Fqg5jy4',
+    include_knowledge_bases= ['hn_kb_fixed'],
+    include_tables=['hackernews.hnstories'],
+    prompt_template='
+        mindsdb.hackernews.hnstories stores data from the hackernews site, basically the title, text, score descendants and id of the story.
+        ';
+```
+
 # Agent with custom temperature and prompt
+
+```bash
 python main.py kb create-agent hn_expert hn_stories_kb --model-name gemini-pro --agent-params '{"temperature":0.2, "prompt_template":"You are an expert analyst of HackerNews content. Answer questions based on the provided articles."}'
 
 # Agent with specific API configuration
