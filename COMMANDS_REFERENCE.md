@@ -68,7 +68,7 @@ python main.py kb create <kb_name> --embedding-model <model> --reranking-model <
 **Examples:**
 ```bash
 # Basic KB creation
-python main.py kb create my_documents_kb --embedding-model nomic-embed-text --reranking-model llama3
+python main.py kb create my_hn_stories_kb --embedding-model nomic-embed-text --reranking-model llama3
 
 # KB with custom content and metadata columns for HackerNews stories
 python main.py kb create hn_stories_kb --embedding-model nomic-embed-text --reranking-model llama3 --content-columns "title,text" --metadata-columns "id,by,score,time" --id-column id
@@ -105,13 +105,13 @@ python main.py kb ingest <kb_name> --from-hackernews <table> [options]
 **PowerShell/Bash/Zsh:**
 ```bash
 # Simple ingestion with auto-detected columns
-python main.py kb ingest my_documents_kb --from-hackernews stories --limit 50
+python main.py kb ingest my_hn_stories_kb --from-hackernews stories --limit 50
 
 # Custom content columns only
-python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --limit 100
+python main.py kb ingest my_hn_stories_kb --from-hackernews stories --content-columns title --limit 100
 
 # Custom content and metadata mapping
-python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --metadata-map '{"story_id":"id", "author":"by", "score":"score"}' --limit 100
+python main.py kb ingest my_hn_stories_kb --from-hackernews stories --content-columns title --metadata-map '{"story_id":"id", "author":"by", "score":"score"}' --limit 100
 
 # Ingest comments with custom mapping
 python main.py kb ingest comment_kb --from-hackernews comments --metadata-map '{"comment_id":"id", "author":"by", "parent_story":"parent"}' --limit 200
@@ -120,13 +120,13 @@ python main.py kb ingest comment_kb --from-hackernews comments --metadata-map '{
 **Windows Command Prompt:**
 ```cmd
 Simple ingestion with auto-detected columns
-python main.py kb ingest my_documents_kb --from-hackernews stories --limit 50
+python main.py kb ingest my_hn_stories_kb --from-hackernews stories --limit 50
 
 RUN Custom content columns only
-python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --limit 100
+python main.py kb ingest my_hn_stories_kb --from-hackernews stories --content-columns title --limit 100
 
 RUN Custom content and metadata mapping
-python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --metadata-map "{\"story_id\":\"id\", \"author\":\"by\", \"score\":\"score\"}" --limit 100
+python main.py kb ingest my_hn_stories_kb --from-hackernews stories --content-columns title --metadata-map "{\"story_id\":\"id\", \"author\":\"by\", \"score\":\"score\"}" --limit 100
 
 RUN Ingest comments with custom mapping
 python main.py kb ingest comment_kb --from-hackernews comments --metadata-map "{\"comment_id\":\"id\", \"author\":\"by\", \"parent_story\":\"parent\"}" --limit 200
@@ -152,13 +152,13 @@ python main.py kb query <kb_name> "<query_text>" [options]
 **PowerShell/Bash/Zsh:**
 ```bash
 # Basic query
-python main.py kb query my_documents_kb "latest trends in AI"
+python main.py kb query my_hn_stories_kb "latest trends in AI"
 
 # Query with result limit
-python main.py kb query my_documents_kb "Python programming tips" --limit 5
+python main.py kb query my_hn_stories_kb "Python programming tips" --limit 5
 
 # Query with metadata filter
-python main.py kb query my_documents_kb "machine learning" --metadata-filter '{"author":"tech_expert", "score":{"$gt":50}}'
+python main.py kb query my_hn_stories_kb "machine learning" --metadata-filter '{"author":"tech_expert", "score":{"$gt":50}}'
 
 # Search specific topics in HackerNews stories
 python main.py kb query hn_stories_kb "startups and funding" --metadata-filter '{"score":{"$gte":100}}'
@@ -167,13 +167,13 @@ python main.py kb query hn_stories_kb "startups and funding" --metadata-filter '
 **Windows Command Prompt:**
 ```cmd
 RUN Basic query
-python main.py kb query my_documents_kb "latest trends in AI"
+python main.py kb query my_hn_stories_kb "latest trends in AI"
 
 RUN Query with result limit
-python main.py kb query my_documents_kb "Python programming tips" --limit 5
+python main.py kb query my_hn_stories_kb "Python programming tips" --limit 5
 
 RUN Query with metadata filter
-python main.py kb query my_documents_kb "machine learning" --metadata-filter "{\"author\":\"tech_expert\", \"score\":{\"$gt\":50}}"
+python main.py kb query my_hn_stories_kb "machine learning" --metadata-filter "{\"author\":\"tech_expert\", \"score\":{\"$gt\":50}}"
 
 RUN Search specific topics in HackerNews stories
 python main.py kb query hn_stories_kb "startups and funding" --metadata-filter "{\"score\":{\"$gte\":100}}"
@@ -223,7 +223,7 @@ python main.py kb create-agent <agent_name> <kb_name> --model-name <model> [opti
 **PowerShell/Bash/Zsh:**
 ```bash
 # Basic agent creation
-python main.py kb create-agent my_kb_agent my_documents_kb --model-name gemini-pro
+python main.py kb create-agent my_kb_agent my_hn_stories_kb --model-name gemini-pro
 
 # Agent with custom temperature and prompt
 python main.py kb create-agent hn_expert hn_stories_kb --model-name gemini-pro --agent-params '{"temperature":0.2, "prompt_template":"You are an expert analyst of HackerNews content. Answer questions based on the provided articles."}'
@@ -235,7 +235,7 @@ python main.py kb create-agent research_assistant research_kb --model-name gpt-4
 **Windows Command Prompt:**
 ```cmd
 RUN Basic agent creation
-python main.py kb create-agent my_kb_agent my_documents_kb --model-name gemini-pro
+python main.py kb create-agent my_kb_agent my_hn_stories_kb --model-name gemini-pro
 ```
 
 ```cmd
