@@ -124,48 +124,84 @@ class MindsDBHandler:
             print(f"Error executing create HackerNews datasource query for '{ds_name}': {str(e)}")
             return False
 
-    def create_knowledge_base(self, kb_name: str, embedding_model_provider: str, embedding_model_name: str, 
-                             embedding_model_base_url: str = None, reranking_model_provider: str = None, 
-                             reranking_model_name: str = None, reranking_model_base_url: str = None,
+    def create_knowledge_base(self, kb_name: str,
+                             embedding_provider: str, embedding_model: str,
+                             embedding_base_url: str = None, embedding_api_key: str = None,
+                             reranking_provider: str = None, reranking_model: str = None,
+                             reranking_base_url: str = None, reranking_api_key: str = None,
                              content_columns: list = None, metadata_columns: list = None, id_column: str = None):
-        if not self.project: print("Error: MindsDB connection not established."); return False
+        if not self.project:
+            print("Error: MindsDB connection not established.")
+            return False
 
-        if embedding_model_base_url: embedding_model_base_url = embedding_model_base_url.rstrip('/')
-        if reranking_model_base_url: reranking_model_base_url = reranking_model_base_url.rstrip('/')
+        using_clauses = []
 
-        embedding_model_config_parts = [f'"provider": "{embedding_model_provider}"', f'"model_name": "{embedding_model_name}"']
-        if embedding_model_base_url: embedding_model_config_parts.append(f'"base_url": "{embedding_model_base_url}"')
-        embedding_model_config = ", ".join(embedding_model_config_parts)
-
-        query = f"CREATE KNOWLEDGE_BASE {kb_name} USING embedding_model = {{ {embedding_model_config} }}"
-
-        if reranking_model_provider and reranking_model_name:
-            reranking_model_config_parts = [f'"provider": "{reranking_model_provider}"', f'"model_name": "{reranking_model_name}"']
-            if reranking_model_base_url: reranking_model_config_parts.append(f'"base_url": "{reranking_model_base_url}"')
-            reranking_model_config = ", ".join(reranking_model_config_parts)
-            query += f", reranking_model = {{ {reranking_model_config} }}"
+        # Embedding model configuration
+        emb_config = {
+            "provider": embedding_provider,
+            "model_name": embedding_model
+        }
+        if embedding_base_url:
+            emb_config["base_url"] = embedding_base_url.rstrip('/')
+        if embedding_api_key:
+            emb_config["api_key"] = embedding_api_key
         
+        # Correctly escape special characters in JSON string values
+        emb_config_str = ", ".join([f'"{k}": "{str(v).replace("\"", "\\\"")}"' for k, v in emb_config.items()])
+        using_clauses.append(f"embedding_model = {{ {emb_config_str} }}")
+
+        # Reranking model configuration (if specified)
+        if reranking_provider and reranking_model:
+            rerank_config = {
+                "provider": reranking_provider,
+                "model_name": reranking_model
+            }
+            if reranking_base_url:
+                rerank_config["base_url"] = reranking_base_url.rstrip('/')
+            if reranking_api_key:
+                rerank_config["api_key"] = reranking_api_key
+
+            rerank_config_str = ", ".join([f'"{k}": "{str(v).replace("\"", "\\\"")}"' for k, v in rerank_config.items()])
+            using_clauses.append(f"reranking_model = {{ {rerank_config_str} }}")
+
         # Add content_columns, metadata_columns, and id_column if specified
         if content_columns:
-            content_columns_str = json.dumps(content_columns)  # Convert to JSON format
-            query += f", content_columns = {content_columns_str}"
+            # Ensure content_columns is a list of strings, then format for SQL
+            if isinstance(content_columns, list) and all(isinstance(col, str) for col in content_columns):
+                 # MindsDB expects content_columns = ['col1', 'col2'] or content_columns = 'col1'
+                if len(content_columns) == 1:
+                    using_clauses.append(f"content_columns = '{content_columns[0]}'")
+                else:
+                    content_columns_sql_array = "[" + ", ".join([f"'{col}'" for col in content_columns]) + "]"
+                    using_clauses.append(f"content_columns = {content_columns_sql_array}")
+            else:
+                print("Warning: content_columns should be a list of strings. Skipping.")
         
         if metadata_columns:
-            metadata_columns_str = json.dumps(metadata_columns)  # Convert to JSON format
-            query += f", metadata_columns = {metadata_columns_str}"
+            if isinstance(metadata_columns, list) and all(isinstance(col, str) for col in metadata_columns):
+                if len(metadata_columns) == 1:
+                    using_clauses.append(f"metadata_columns = '{metadata_columns[0]}'")
+                else:
+                    metadata_columns_sql_array = "[" + ", ".join([f"'{col}'" for col in metadata_columns]) + "]"
+                    using_clauses.append(f"metadata_columns = {metadata_columns_sql_array}")
+            else:
+                print("Warning: metadata_columns should be a list of strings. Skipping.")
         
         if id_column:
-            query += f", id_column = '{id_column}'"
+            using_clauses.append(f"id_column = '{id_column}'")
+
+        query = f"CREATE KNOWLEDGE_BASE {kb_name} USING {', '.join(using_clauses)};"
         
-        query += ";"
         try:
             self.execute_sql(query)
             print(f"Knowledge Base '{kb_name}' creation command executed.")
             return True
         except Exception as e:
             if "already exists" in str(e).lower():
-                print(f"Knowledge Base '{kb_name}' already exists."); return True
-            print(f"Error creating Knowledge Base '{kb_name}': {str(e)}"); return False
+                print(f"Knowledge Base '{kb_name}' already exists.")
+                return True
+            print(f"Error creating Knowledge Base '{kb_name}': {str(e)}")
+            return False
 
     def create_index_on_knowledge_base(self, kb_name: str):
         if not self.project: print("Error: MindsDB connection not established."); return False

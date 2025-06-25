@@ -48,34 +48,99 @@ python main.py setup hackernews --name my_hackernews_source
 
 ## `kb create` - Create a new Knowledge Base
 
-Creates a new Knowledge Base with specified embedding and reranking models.
+Creates a new Knowledge Base with specified embedding and (optional) reranking models, allowing for different providers and configurations.
 
 **Usage:**
 ```bash
-python main.py kb create <kb_name> --embedding-model <model> --reranking-model <model> [options]
+python main.py kb create <kb_name> [options]
 ```
 
 **Required Arguments:**
-- `<kb_name>`: Name of the Knowledge Base to create
-- `--embedding-model`: Embedding model to use (e.g., nomic-embed-text)  
-- `--reranking-model`: Reranking model to use (e.g., llama3)
+- `<kb_name>`: Name of the Knowledge Base to create.
 
-**Optional Arguments:**
-- `--content-columns`: Comma-separated list of columns to use as content (default: auto-detect based on table)
-- `--metadata-columns`: Comma-separated list of columns to store as metadata (default: auto-detect based on table)
-- `--id-column`: Column to use as unique identifier (default: id)
+**Embedding Model Options:**
+- `--embedding-provider <provider>`: Provider for the embedding model (e.g., `ollama`, `openai`, `google`). Default: `ollama`.
+- `--embedding-model <model_name>`: Name of the embedding model (e.g., `nomic-embed-text`, `text-embedding-ada-002`, `text-embedding-004`). Default: `nomic-embed-text`.
+- `--embedding-base-url <url>`: Base URL for the embedding model provider (e.g., for Ollama: `http://localhost:11434`). Optional, defaults to `OLLAMA_BASE_URL` from config if provider is `ollama`.
+- `--embedding-api-key <key>`: API key for the embedding model provider (e.g., for Google, OpenAI). Optional.
+
+**Reranking Model Options (all optional):**
+- `--reranking-provider <provider>`: Provider for the reranking model (e.g., `ollama`, `google`, `cohere`).
+- `--reranking-model <model_name>`: Name of the reranking model (e.g., `llama3`, `gemini-1.5-flash`).
+- `--reranking-base-url <url>`: Base URL for the reranking model provider. Optional, defaults to `OLLAMA_BASE_URL` from config if provider is `ollama`.
+- `--reranking-api-key <key>`: API key for the reranking model provider. Optional.
+
+**Data Structure Options:**
+- `--content-columns <cols>`: Comma-separated list of column names to be used as content for embeddings (e.g., `"title,text"`).
+- `--metadata-columns <cols>`: Comma-separated list of column names to be stored as metadata.
+- `--id-column <col_name>`: Name of the column to be used as the unique identifier for records.
 
 **Examples:**
-```bash
-# Basic KB creation
-python main.py kb create my_hn_stories_kb --embedding-model nomic-embed-text --reranking-model llama3
 
-# KB with custom content and metadata columns for HackerNews stories
-python main.py kb create hn_stories_kb --embedding-model nomic-embed-text --reranking-model llama3 --content-columns "title,text" --metadata-columns "id,by,score,time" --id-column id
+1.  **Basic KB with default Ollama embedder, no reranker:**
+    ```bash
+    python main.py kb create my_ollama_kb
+    ```
+    *(Assumes `nomic-embed-text` for embedding and `OLLAMA_BASE_URL` is configured or Ollama runs on default)*
 
-# KB optimized for comments
-python main.py kb create hn_comments_kb --embedding-model nomic-embed-text --reranking-model llama3 --content-columns "text" --metadata-columns "id,by,parent,time" --id-column id
-```
+2.  **KB with Ollama embedder and Ollama reranker:**
+    ```bash
+    python main.py kb create my_advanced_ollama_kb \
+        --embedding-model nomic-embed-text \
+        --reranking-provider ollama \
+        --reranking-model llama3
+    ```
+    *(Assumes `OLLAMA_BASE_URL` is configured or Ollama runs on default for both)*
+
+3.  **KB with Google Gemini for embeddings and no reranker:**
+    ```bash
+    python main.py kb create my_gemini_embed_kb \
+        --embedding-provider ollama \
+        --embedding-model nomic-embed-text \
+        --embedding-base-url "http://host.docker.internal:11434" \
+        --reranking-provider google \
+        --reranking-model gemini-1.5-flash \
+        --reranking-api-key "YOUR_GOOGLE_API_KEY" \
+        --content-columns "text" \  
+        --metadata-columns "title,score,descendants" \
+        --id-column "id"
+    ```
+
+4.  **KB with OpenAI embeddings and Google Gemini reranker:**
+    ```bash
+    # PowerShell/Bash/Zsh
+    python main.py kb create my_mixed_provider_kb \
+        --embedding-provider openai \
+        --embedding-model text-embedding-ada-002 \
+        --embedding-api-key "YOUR_OPENAI_API_KEY" \
+        --reranking-provider google \
+        --reranking-model gemini-1.5-flash \
+        --reranking-api-key "YOUR_GOOGLE_API_KEY" \
+        --content-columns "text" \
+        --metadata-columns "title,score,descendants" \
+        --id-column "id"
+    ```
+    ```cmd
+    REM Windows Command Prompt (ensure correct JSON escaping if any complex params were JSON)
+    python main.py kb create my_mixed_provider_kb 
+        --embedding-provider ollama 
+        --embedding-model nomic-embed-text 
+        --embedding-base-url "http://host.docker.internal:11434"
+        --reranking-provider google 
+        --reranking-model gemini-1.5-flash 
+        --reranking-api-key "YOUR_GOOGLE_API_KEY" \
+        --content-columns "text" \
+        --metadata-columns "title,score,descendants" \
+        --id-column "id"
+    ```
+
+5.  **KB with custom content/metadata columns for HackerNews stories (using default Ollama embedder):**
+    ```bash
+    python main.py kb create hn_stories_custom_kb \
+        --content-columns "title,text" \
+        --metadata-columns "id,by,score,time" \
+        --id-column "id"
+    ```
 
 ## `kb ingest` - Ingest data into a Knowledge Base
 
@@ -105,13 +170,13 @@ python main.py kb ingest <kb_name> --from-hackernews <table> [options]
 **PowerShell/Bash/Zsh:**
 ```bash
 # Simple ingestion with auto-detected columns
-python main.py kb ingest my_hn_stories_kb --from-hackernews stories --limit 50
+python main.py kb ingest my_documents_kb --from-hackernews stories --limit 50
 
 # Custom content columns only
-python main.py kb ingest my_hn_stories_kb --from-hackernews stories --content-columns title --limit 100
+python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --limit 100
 
 # Custom content and metadata mapping
-python main.py kb ingest my_hn_stories_kb --from-hackernews stories --content-columns title --metadata-map '{"story_id":"id", "author":"by", "score":"score"}' --limit 100
+python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --metadata-map '{"story_id":"id", "author":"by", "score":"score"}' --limit 100
 
 # Ingest comments with custom mapping
 python main.py kb ingest comment_kb --from-hackernews comments --metadata-map '{"comment_id":"id", "author":"by", "parent_story":"parent"}' --limit 200
@@ -120,13 +185,13 @@ python main.py kb ingest comment_kb --from-hackernews comments --metadata-map '{
 **Windows Command Prompt:**
 ```cmd
 Simple ingestion with auto-detected columns
-python main.py kb ingest my_hn_stories_kb --from-hackernews stories --limit 50
+python main.py kb ingest my_documents_kb --from-hackernews stories --limit 50
 
 RUN Custom content columns only
-python main.py kb ingest my_hn_stories_kb --from-hackernews stories --content-columns title --limit 100
+python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --limit 100
 
 RUN Custom content and metadata mapping
-python main.py kb ingest my_hn_stories_kb --from-hackernews stories --content-columns title --metadata-map "{\"story_id\":\"id\", \"author\":\"by\", \"score\":\"score\"}" --limit 100
+python main.py kb ingest my_documents_kb --from-hackernews stories --content-columns title --metadata-map "{\"story_id\":\"id\", \"author\":\"by\", \"score\":\"score\"}" --limit 100
 
 RUN Ingest comments with custom mapping
 python main.py kb ingest comment_kb --from-hackernews comments --metadata-map "{\"comment_id\":\"id\", \"author\":\"by\", \"parent_story\":\"parent\"}" --limit 200
@@ -152,13 +217,13 @@ python main.py kb query <kb_name> "<query_text>" [options]
 **PowerShell/Bash/Zsh:**
 ```bash
 # Basic query
-python main.py kb query my_hn_stories_kb "latest trends in AI"
+python main.py kb query my_documents_kb "latest trends in AI"
 
 # Query with result limit
-python main.py kb query my_hn_stories_kb "Python programming tips" --limit 5
+python main.py kb query my_documents_kb "Python programming tips" --limit 5
 
 # Query with metadata filter
-python main.py kb query my_hn_stories_kb "machine learning" --metadata-filter '{"author":"tech_expert", "score":{"$gt":50}}'
+python main.py kb query my_documents_kb "machine learning" --metadata-filter '{"author":"tech_expert", "score":{"$gt":50}}'
 
 # Search specific topics in HackerNews stories
 python main.py kb query hn_stories_kb "startups and funding" --metadata-filter '{"score":{"$gte":100}}'
@@ -167,13 +232,13 @@ python main.py kb query hn_stories_kb "startups and funding" --metadata-filter '
 **Windows Command Prompt:**
 ```cmd
 RUN Basic query
-python main.py kb query my_hn_stories_kb "latest trends in AI"
+python main.py kb query my_documents_kb "latest trends in AI"
 
 RUN Query with result limit
-python main.py kb query my_hn_stories_kb "Python programming tips" --limit 5
+python main.py kb query my_documents_kb "Python programming tips" --limit 5
 
 RUN Query with metadata filter
-python main.py kb query my_hn_stories_kb "machine learning" --metadata-filter "{\"author\":\"tech_expert\", \"score\":{\"$gt\":50}}"
+python main.py kb query my_documents_kb "machine learning" --metadata-filter "{\"author\":\"tech_expert\", \"score\":{\"$gt\":50}}"
 
 RUN Search specific topics in HackerNews stories
 python main.py kb query hn_stories_kb "startups and funding" --metadata-filter "{\"score\":{\"$gte\":100}}"
@@ -223,7 +288,7 @@ python main.py kb create-agent <agent_name> <kb_name> --model-name <model> [opti
 **PowerShell/Bash/Zsh:**
 ```bash
 # Basic agent creation
-python main.py kb create-agent my_kb_agent my_hn_stories_kb --model-name gemini-pro
+python main.py kb create-agent my_kb_agent my_documents_kb --model-name gemini-pro
 
 # Agent with custom temperature and prompt
 python main.py kb create-agent hn_expert hn_stories_kb --model-name gemini-pro --agent-params '{"temperature":0.2, "prompt_template":"You are an expert analyst of HackerNews content. Answer questions based on the provided articles."}'
@@ -235,7 +300,7 @@ python main.py kb create-agent research_assistant research_kb --model-name gpt-4
 **Windows Command Prompt:**
 ```cmd
 RUN Basic agent creation
-python main.py kb create-agent my_kb_agent my_hn_stories_kb --model-name gemini-pro
+python main.py kb create-agent my_kb_agent my_documents_kb --model-name gemini-pro
 ```
 
 ```cmd

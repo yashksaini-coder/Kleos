@@ -13,66 +13,85 @@ def kb_group():
 
 @kb_group.command('create')
 @click.argument('kb_name')
-@click.option('--embedding-provider', default='ollama', show_default=True, help="Provider for embedding model (e.g., ollama, openai).")
+@click.option('--embedding-provider', default='ollama', show_default=True, help="Provider for embedding model (e.g., ollama, openai, google).")
 @click.option('--embedding-model', default='nomic-embed-text', show_default=True, help="Name of the embedding model.")
-@click.option('--embedding-base-url', default=None, help="Base URL for the embedding model provider (if needed).")
-@click.option('--reranking-provider', default='ollama', show_default=True, help="Provider for reranking model (optional).") # Default should be None or allow empty
-@click.option('--reranking-model', default=None, help="Name of the reranking model (optional, e.g., llama3).") # Default should be None
+@click.option('--embedding-base-url', default=None, help="Base URL for the embedding model provider (e.g., for ollama).")
+@click.option('--embedding-api-key', default=None, help="API key for the embedding model provider (e.g., for google, openai).")
+@click.option('--reranking-provider', default=None, help="Provider for reranking model (optional, e.g., ollama, google, cohere).")
+@click.option('--reranking-model', default=None, help="Name of the reranking model (optional, e.g., llama3, gemini-pro).")
 @click.option('--reranking-base-url', default=None, help="Base URL for the reranking model provider (if needed, optional).")
-@click.option('--content-columns', help="Comma-separated list of content columns (e.g., 'title,text'). Defaults to 'title' for HackerNews stories.")
-@click.option('--metadata-columns', help="Comma-separated list of metadata columns (e.g., 'id,time,score'). Defaults to 'id,time,score,descendants' for HackerNews.")
-@click.option('--id-column', help="Name of the ID column (e.g., 'id'). Defaults to 'id' for HackerNews.")
+@click.option('--reranking-api-key', default=None, help="API key for the reranking model provider (if needed, optional).")
+@click.option('--content-columns', help="Comma-separated list of content columns (e.g., 'title,text').")
+@click.option('--metadata-columns', help="Comma-separated list of metadata columns (e.g., 'id,time,score').")
+@click.option('--id-column', help="Name of the ID column (e.g., 'id').")
 @click.pass_context
-def kb_create(ctx, kb_name, embedding_provider, embedding_model, embedding_base_url, reranking_provider, reranking_model, reranking_base_url, content_columns, metadata_columns, id_column):
-    """Creates a new Knowledge Base with optional content/metadata column specifications."""
+def kb_create(ctx, kb_name, embedding_provider, embedding_model, embedding_base_url, embedding_api_key,
+              reranking_provider, reranking_model, reranking_base_url, reranking_api_key,
+              content_columns, metadata_columns, id_column):
+    """Creates a new Knowledge Base with specified embedding and reranking models."""
     handler = ctx.obj
     if not handler or not handler.project:
-        click.echo(click.style("MindsDB connection not available.", fg='red'))
-        return
+        # Attempt to connect if not already connected or if connection failed previously
+        if not handler.connect():
+            click.echo(click.style("MindsDB connection failed. Please ensure MindsDB is running and accessible.", fg='red'))
+            return
+        # If connect() was called, handler.project should now be set if successful.
+        # If it's still None, then the connection truly failed.
+        if not handler.project:
+            click.echo(click.style("MindsDB connection not available even after retry.", fg='red'))
+            return
 
-    # Auto-use app_config.OLLAMA_BASE_URL if provider is ollama and URL not specified
+
+    # Auto-use app_config.OLLAMA_BASE_URL if provider is ollama and URL not specified for embedding
     if embedding_provider == 'ollama' and not embedding_base_url:
-        embedding_base_url = app_config.OLLAMA_BASE_URL
-    if reranking_provider == 'ollama' and not reranking_base_url and reranking_model: # Only if reranking_model is specified
-        reranking_base_url = app_config.OLLAMA_BASE_URL
+        embedding_base_url = getattr(app_config, 'OLLAMA_BASE_URL', None)
+        if not embedding_base_url:
+            click.echo(click.style("Warning: Embedding provider is ollama, but OLLAMA_BASE_URL is not configured and --embedding-base-url not provided.", fg='yellow'))
 
-    # Ensure reranking provider/URL are None if model is not specified
+    # Auto-use app_config.OLLAMA_BASE_URL if provider is ollama and URL not specified for reranking
+    if reranking_provider == 'ollama' and not reranking_base_url and reranking_model:
+        reranking_base_url = getattr(app_config, 'OLLAMA_BASE_URL', None)
+        if not reranking_base_url:
+            click.echo(click.style("Warning: Reranking provider is ollama, but OLLAMA_BASE_URL is not configured and --reranking-base-url not provided.", fg='yellow'))
+
+    # Ensure reranking provider/URL/key are None if model is not specified
     if not reranking_model:
         reranking_provider = None
-        reranking_base_url = None # Explicitly set to None if no model
+        reranking_base_url = None
+        reranking_api_key = None
 
     # Parse content and metadata columns
-    content_columns_list = None
-    if content_columns:
-        content_columns_list = [col.strip() for col in content_columns.split(',')]
-    
-    metadata_columns_list = None
-    if metadata_columns:
-        metadata_columns_list = [col.strip() for col in metadata_columns.split(',')]
+    content_columns_list = [col.strip() for col in content_columns.split(',')] if content_columns else None
+    metadata_columns_list = [col.strip() for col in metadata_columns.split(',')] if metadata_columns else None
 
-    click.echo(f"Creating Knowledge Base '{kb_name}'...")
+    click.echo(f"Creating Knowledge Base '{kb_name}' with embedding model '{embedding_provider}/{embedding_model}'...")
+    if reranking_model:
+        click.echo(f"Using reranking model '{reranking_provider}/{reranking_model}'.")
     if content_columns_list:
         click.echo(f"Content columns: {content_columns_list}")
     if metadata_columns_list:
         click.echo(f"Metadata columns: {metadata_columns_list}")
     if id_column:
         click.echo(f"ID column: {id_column}")
-    
+
     if handler.create_knowledge_base(
-        kb_name,
-        embedding_model_provider=embedding_provider,
-        embedding_model_name=embedding_model,
-        embedding_model_base_url=embedding_base_url,
-        reranking_model_provider=reranking_provider,
-        reranking_model_name=reranking_model,
-        reranking_model_base_url=reranking_base_url,
+        kb_name=kb_name,
+        embedding_provider=embedding_provider,
+        embedding_model=embedding_model,
+        embedding_base_url=embedding_base_url,
+        embedding_api_key=embedding_api_key,
+        reranking_provider=reranking_provider,
+        reranking_model=reranking_model,
+        reranking_base_url=reranking_base_url,
+        reranking_api_key=reranking_api_key,
         content_columns=content_columns_list,
         metadata_columns=metadata_columns_list,
         id_column=id_column
     ):
-        click.echo(click.style(f"Knowledge Base '{kb_name}' created successfully or already exists.", fg='green'))
+        click.echo(click.style(f"Knowledge Base '{kb_name}' creation command sent successfully.", fg='green'))
+        click.echo(click.style(f"Note: KB creation is asynchronous. Check MindsDB logs or list KBs to confirm.", fg='bright_black'))
     else:
-        click.echo(click.style(f"Failed to create Knowledge Base '{kb_name}'.", fg='red'))
+        click.echo(click.style(f"Failed to send command to create Knowledge Base '{kb_name}'.", fg='red'))
 
 @kb_group.command('index')
 @click.argument('kb_name')
