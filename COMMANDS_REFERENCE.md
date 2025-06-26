@@ -42,24 +42,6 @@ python main.py setup hackernews --name <datasource_name>
 python main.py setup hackernews --name my_hackernews_source
 ```
 
-### `kb list-databases` - List available databases
-
-Lists all databases available in the current MindsDB instance.
-
-**Usage:**
-```bash
-python main.py kb list-databases
-```
-
-**Example Output:**
-```
-Available databases:
-- information_schema
-- mindsdb
-- hackernews_db
-- my_custom_datasource
-```
-
 ---
 
 # Knowledge Base Commands
@@ -113,15 +95,9 @@ python main.py kb create <kb_name> [options]
 3.  **KB with Google Gemini for embeddings and no reranker:**
     ```bash
     python main.py kb create my_gemini_embed_kb \
-        --embedding-provider ollama \
-        --embedding-model nomic-embed-text \
-        --embedding-base-url "http://host.docker.internal:11434" \
-        --reranking-provider google \
-        --reranking-model gemini-1.5-flash \
-        --reranking-api-key "YOUR_GOOGLE_API_KEY" \
-        --content-columns "text" \  
-        --metadata-columns "title,score,descendants" \
-        --id-column "id"
+        --embedding-provider google \
+        --embedding-model text-embedding-004 \
+        --embedding-api-key "YOUR_GOOGLE_API_KEY"
     ```
 
 4.  **KB with OpenAI embeddings and Google Gemini reranker:**
@@ -134,22 +110,22 @@ python main.py kb create <kb_name> [options]
         --reranking-provider google \
         --reranking-model gemini-1.5-flash \
         --reranking-api-key "YOUR_GOOGLE_API_KEY" \
-        --content-columns "text" \
-        --metadata-columns "title,score,descendants" \
-        --id-column "id"
+        --content-columns "document_content" \
+        --metadata-columns "source,timestamp" \
+        --id-column "doc_id"
     ```
     ```cmd
     REM Windows Command Prompt (ensure correct JSON escaping if any complex params were JSON)
     python main.py kb create my_mixed_provider_kb 
-        --embedding-provider ollama 
-        --embedding-model nomic-embed-text 
-        --embedding-base-url "http://host.docker.internal:11434"
+        --embedding-provider openai 
+        --embedding-model text-embedding-ada-002 
+        --embedding-api-key "YOUR_OPENAI_API_KEY" 
         --reranking-provider google 
         --reranking-model gemini-1.5-flash 
-        --reranking-api-key "YOUR_GOOGLE_API_KEY" \
-        --content-columns "text" \
-        --metadata-columns "title,score,descendants" \
-        --id-column "id"
+        --reranking-api-key "YOUR_GOOGLE_API_KEY" 
+        --content-columns "document_content" 
+        --metadata-columns "source,timestamp" 
+        --id-column "doc_id"
     ```
 
 5.  **KB with custom content/metadata columns for HackerNews stories (using default Ollama embedder):**
@@ -241,7 +217,7 @@ python main.py kb query my_documents_kb "latest trends in AI"
 python main.py kb query my_documents_kb "Python programming tips" --limit 5
 
 # Query with metadata filter
-python main.py kb query my_documents_kb "machine learning" --metadata-filter '{"author":"tech_expert", "score":50}}'
+python main.py kb query my_documents_kb "machine learning" --metadata-filter '{"author":"tech_expert", "score":{"$gt":50}}'
 
 # Search specific topics in HackerNews stories
 python main.py kb query hn_stories_kb "startups and funding" --metadata-filter '{"score":{"$gte":100}}'
@@ -256,12 +232,29 @@ RUN Query with result limit
 python main.py kb query my_documents_kb "Python programming tips" --limit 5
 
 RUN Query with metadata filter
-python main.py kb query my_documents_kb "machine learning" --metadata-filter "{\"author\":\"tech_expert\", \"score\":50}"
+python main.py kb query my_documents_kb "machine learning" --metadata-filter "{\"author\":\"tech_expert\", \"score\":{\"$gt\":50}}"
 
 RUN Search specific topics in HackerNews stories
-python main.py kb query hn_stories_kb "startups and funding" --metadata-filter "{\"score\":100}"
+python main.py kb query hn_stories_kb "startups and funding" --metadata-filter "{\"score\":{\"$gte\":100}}"
 ```
 
+### `kb list-databases` - List available databases
+
+Lists all databases available in the current MindsDB instance.
+
+**Usage:**
+```bash
+python main.py kb list-databases
+```
+
+**Example Output:**
+```
+Available databases:
+- information_schema
+- mindsdb
+- hackernews_db
+- my_custom_datasource
+```
 
 ### `kb create-agent` - Create an AI Agent
 
@@ -371,14 +364,64 @@ python main.py ai chat --model <model_name> [options]
 
 ### `job create` - Create a job for data processing
 
-Creates a job for processing data with AI models.
+**Arguments:**
+- `<job_name>`: Name of the job to create
+- `<sql_statements>`: SQL statements to execute (e.g., `SELECT * FROM hackernews.hnstories`)
+- `--project`: Project name where the job should be created (optional)
+- `--schedule`: Schedule interval for the job (optional, e.g., `EVERY 1 hour`, `EVERY 2 days`)
+- `--start-date`: Start date in format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS' (optional)
+- `--end-date`: End date in format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS' (optional)
+- `--if-condition`: Conditional statement - job only runs if this returns rows (optional)
 
 **Usage:**
 ```bash
-python main.py job create <job_name> --model <model> --input <input_file> [options]
+python main.py job create <job_name> <SQL commands> --project-name <project_name>  [options]
 ```
 
----
+**Example:**
+```bash
+python main.py job create manual_job "SELECT * FROM hackernews.hnstories" --project "mindsdb" --schedule "EVERY 1 DAY"
+```
+
+### `job drop` - Drop an existing job
+
+**Usage:**
+```bash
+python main.py job drop <job_name>
+```
+
+**Arguments:**
+- `<job_name>`: Name of the job to drop
+
+**Examples:**
+```bash
+python main.py job drop my_job
+```
+
+### `job list` - List all jobs
+
+**Usage:**
+```bash
+python main.py job list
+```
+### `job status` - Check the status of a job
+**Usage:**
+```bash 
+python main.py job status <job_name>
+```
+
+### `job history` - View job execution history
+**Usage:**
+```bash
+python main.py job history <job_name>
+```
+
+### `job logs` - View logs for a job
+**Usage:**
+```bash
+python main.py job logs <job_name>
+```
+
 
 ## Best Practices
 

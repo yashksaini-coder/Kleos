@@ -166,10 +166,14 @@ class MindsDBHandler:
 
         # Add content_columns, metadata_columns, and id_column if specified
         if content_columns:
-            # Ensure content_columns is a list of strings, then format for SQL as an array
+            # Ensure content_columns is a list of strings, then format for SQL
             if isinstance(content_columns, list) and all(isinstance(col, str) for col in content_columns):
-                content_columns_sql_array = "[" + ", ".join([f"'{col}'" for col in content_columns]) + "]"
-                using_clauses.append(f"content_columns = {content_columns_sql_array}")
+                 # MindsDB expects content_columns = ['col1', 'col2'] or content_columns = 'col1'
+                if len(content_columns) == 1:
+                    using_clauses.append(f"content_columns = '{content_columns[0]}'")
+                else:
+                    content_columns_sql_array = "[" + ", ".join([f"'{col}'" for col in content_columns]) + "]"
+                    using_clauses.append(f"content_columns = {content_columns_sql_array}")
             else:
                 print("Warning: content_columns should be a list of strings. Skipping.")
         
@@ -362,48 +366,76 @@ class MindsDBHandler:
         except Exception as e: print(f"Error querying AI Model '{model_name}': {str(e)}"); return None
 
     # --- New AI Agent Methods ---
-    def create_kb_agent(self, agent_name: str, kb_name: str, model_provider: str = 'google', model_name: str = 'gemini-pro', agent_params: dict = None):
+    def create_kb_agent(self,
+                        agent_name: str,
+                        model_name: str,
+                        include_knowledge_bases: list[str],
+                        google_api_key: str = None,
+                        include_tables: list[str] = None,
+                        prompt_template: str = None,
+                        other_params: dict = None):
         if not self.project:
             print("Error: MindsDB connection not established.")
             return False
 
         using_clauses = [
-            f"knowledge_base = '{kb_name}'",
-            f"model_name = '{model_name}'",
-            f"provider = '{model_provider}'"
+            f"model = '{model_name}'" # Direct model name
         ]
 
-        processed_params = agent_params.copy() if agent_params else {}
-
-        if model_provider == 'google':
-            api_key_val = processed_params.pop('api_key', config.GOOGLE_GEMINI_API_KEY)
-            if not api_key_val:
-                print("Warning: Google Gemini API key not provided for agent. Creation might fail if not globally set in MindsDB.")
+        # Handle google_api_key
+        if google_api_key:
+            using_clauses.append(f"google_api_key = '{google_api_key}'")
+        elif 'google' in model_name.lower() or (other_params and other_params.get('provider', '').lower() == 'google'): # Heuristic for google model
+            # Try to get from config if not provided
+            config_google_key = getattr(config, 'GOOGLE_GEMINI_API_KEY', None)
+            if config_google_key:
+                using_clauses.append(f"google_api_key = '{config_google_key}'")
             else:
-                 using_clauses.append(f"api_key = '{api_key_val}'")
+                print("Warning: Google model specified or inferred, but google_api_key not provided and not in config. Agent creation might fail.")
 
-        if model_provider == 'ollama':
-            base_url_val = processed_params.pop('base_url', getattr(config, 'OLLAMA_BASE_URL', None))
-            if base_url_val:
-                using_clauses.append(f"base_url = '{base_url_val.rstrip('/')}'")
+
+        # Handle include_knowledge_bases (must be a list of strings)
+        if not include_knowledge_bases or not isinstance(include_knowledge_bases, list) or not all(isinstance(kb, str) for kb in include_knowledge_bases):
+            print("Error: 'include_knowledge_bases' must be a non-empty list of strings.")
+            return False
+        kb_list_str = "[" + ", ".join([f"'{kb.replace("'", "''")}'" for kb in include_knowledge_bases]) + "]"
+        using_clauses.append(f"include_knowledge_bases = {kb_list_str}")
+
+        # Handle include_tables (optional list of strings)
+        if include_tables:
+            if isinstance(include_tables, list) and all(isinstance(tbl, str) for tbl in include_tables):
+                table_list_str = "[" + ", ".join([f"'{tbl.replace("'", "''")}'" for tbl in include_tables]) + "]"
+                using_clauses.append(f"include_tables = {table_list_str}")
             else:
-                print(f"Warning: base_url not provided for ollama agent '{agent_name}'. Defaulting to MindsDB's Ollama setup if any.")
+                print("Warning: 'include_tables' provided but not a list of strings. Skipping.")
 
-        for key, value in processed_params.items():
-            if key == 'base_url' and isinstance(value, str): value = value.rstrip('/')
+        # Handle prompt_template (optional string)
+        if prompt_template:
+            # Triple single quotes for multi-line SQL strings, escape internal single quotes
+            escaped_prompt = prompt_template.replace("'", "''")
+            using_clauses.append(f"prompt_template = '''{escaped_prompt}'''")
 
-            if isinstance(value, str):
-                using_clauses.append(f"{key} = '{str(value).replace("'", "''")}'")
-            elif isinstance(value, (int, float, bool)):
-                using_clauses.append(f"{key} = {value}")
-            else:
-                try:
-                    json_val = json.dumps(value)
-                    using_clauses.append(f"{key} = '{json_val.replace("'", "''")}'")
-                except TypeError:
-                    print(f"Warning: Parameter '{key}' for agent '{agent_name}' could not be serialized. Skipping.")
+        # Handle other_params (e.g., temperature)
+        if other_params:
+            for key, value in other_params.items():
+                # Skip keys already handled or not suitable for direct USING clause
+                if key.lower() in ['model', 'google_api_key', 'include_knowledge_bases', 'include_tables', 'prompt_template', 'provider', 'api_key', 'knowledge_base']: # 'provider', 'api_key', 'knowledge_base' are from old agent style
+                    continue
+
+                if isinstance(value, str):
+                    using_clauses.append(f"{key} = '{str(value).replace("'", "''")}'")
+                elif isinstance(value, (int, float, bool)):
+                    using_clauses.append(f"{key} = {value}")
+                else:
+                    try:
+                        # For complex objects, try to dump as JSON string, then quote it for SQL
+                        json_val = json.dumps(value)
+                        using_clauses.append(f"{key} = '{json_val.replace("'", "''")}'")
+                    except TypeError:
+                        print(f"Warning: Parameter '{key}' from other_params for agent '{agent_name}' could not be serialized to a valid SQL literal. Skipping.")
 
         query = f"CREATE AGENT {agent_name} USING {', '.join(using_clauses)};"
+
         try:
             self.execute_sql(query)
             print(f"Agent '{agent_name}' creation command executed successfully.")
@@ -440,7 +472,252 @@ class MindsDBHandler:
         except Exception as e:
             print(f"Error querying agent '{agent_name}': {str(e)}")
             return None
+        
+    def create_job(self, job_name: str, statements: list, project_name: str = None, start_date: str = None, end_date: str = None, schedule_interval: str = None, if_condition: str = None):
+        """
+        Create a MindsDB job with custom SQL statements.
+        
+        Args:
+            job_name: Name of the job to create
+            statements: List of SQL statements to execute
+            project_name: Optional project name
+            start_date: Optional start date ('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS')
+            end_date: Optional end date ('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS')
+            schedule_interval: Optional schedule interval (e.g., 'EVERY 1 hour', 'EVERY 2 days')
+            if_condition: Optional condition statement
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.project:
+            print("Error: MindsDB connection not established.")
+            return False
+        
+        # Build the job name with project if provided
+        job_full_name = f"{project_name}.{job_name}" if project_name else job_name
+        
+        # Build the SQL statements part
+        statements_str = ";\n    ".join(statements)
+        
+        # Build the complete query
+        query_parts = [f"CREATE JOB IF NOT EXISTS {job_full_name} ("]
+        query_parts.append(f"    {statements_str}")
+        query_parts.append(")")
+        
+        if start_date:
+            query_parts.append(f"START '{start_date}'")
+        
+        if end_date:
+            query_parts.append(f"END '{end_date}'")
+        
+        if schedule_interval:
+            # Ensure the interval starts with 'EVERY'
+            if not schedule_interval.upper().startswith('EVERY'):
+                schedule_interval = f"EVERY {schedule_interval}"
+            query_parts.append(schedule_interval)
+        
+        if if_condition:
+            query_parts.append(f"IF ({if_condition})")
+        
+        query = "\n".join(query_parts) + ";"
+        
+        try:
+            print(f"Creating job '{job_name}' with query:")
+            print(query)
+            self.execute_sql(query)
+            print(f"Job '{job_name}' created successfully.")
+            return True
+        except Exception as e:
+            print(f"Error creating job '{job_name}': {str(e)}")
+            return False
 
+    def update_hackernews_db(self, job_name: str, hn_datasource: str = "hackernews",
+                           schedule_interval: str = 'EVERY 1 day', project_name: str = None):
+        """
+        Create a MindsDB job to periodically refresh the HackerNews database by dropping and recreating it.
+        
+        Args:
+            job_name: Name of the job to create
+            hn_datasource: Name of the HackerNews datasource to refresh (default: 'hackernews')
+            schedule_interval: Schedule interval (e.g., 'EVERY 1 hour', 'EVERY 1 day')
+            project_name: Optional project name
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.project:
+            print("Error: MindsDB connection not established.")
+            return False
+        
+        # Create statements to drop and recreate the HackerNews database
+        statements = [
+            f"DROP DATABASE IF EXISTS {hn_datasource}",
+            f"CREATE DATABASE {hn_datasource} WITH ENGINE = 'hackernews'"
+        ]
+        
+        return self.create_job(
+            job_name=job_name,
+            statements=statements,
+            project_name=project_name,
+            schedule_interval=schedule_interval
+        )
+
+    def list_jobs(self, project_name: str = None):
+        """
+        List all jobs in MindsDB.
+        
+        Args:
+            project_name: Optional project name to filter jobs
+        
+        Returns:
+            DataFrame or None: Job information
+        """
+        if not self.project:
+            print("Error: MindsDB connection not established.")
+            return None
+        
+        try:
+            if project_name:
+                query = f"SELECT * FROM {project_name}.jobs;"
+            else:
+                query = "SHOW JOBS;"
+            
+            result = self.execute_sql(query)
+            if result is not None and not result.empty:
+                print("Available jobs:")
+                print(result.to_string(index=False))
+                return result
+            else:
+                print("No jobs found.")
+                return None
+        except Exception as e:
+            print(f"Error listing jobs: {str(e)}")
+            return None
+
+    def get_job_status(self, job_name: str, project_name: str = 'mindsdb'):
+        """
+        Get the status of a specific job.
+        
+        Args:
+            job_name: Name of the job
+            project_name: Project name (defaults to 'mindsdb')
+        
+        Returns:
+            DataFrame or None: Job status information
+        """
+        if not self.project:
+            print("Error: MindsDB connection not established.")
+            return None
+        
+        try:
+            query = f"SELECT * FROM {project_name}.jobs WHERE name = '{job_name}';"
+            result = self.execute_sql(query)
+            
+            if result is not None and not result.empty:
+                print(f"Job '{job_name}' status:")
+                print(result.to_string(index=False))
+                return result
+            else:
+                print(f"Job '{job_name}' not found.")
+                return None
+        except Exception as e:
+            print(f"Error getting job status for '{job_name}': {str(e)}")
+            return None
+
+    def get_job_history(self, job_name: str, project_name: str = 'mindsdb'):
+        """
+        Get the execution history of a specific job.
+        
+        Args:
+            job_name: Name of the job
+            project_name: Project name (defaults to 'mindsdb')
+        
+        Returns:
+            DataFrame or None: Job execution history
+        """
+        if not self.project:
+            print("Error: MindsDB connection not established.")
+            return None
+        
+        try:
+            query = f"SELECT * FROM log.jobs_history WHERE project = '{project_name}' AND name = '{job_name}'"
+            result = self.execute_sql(query)
+            
+            if result is not None and not result.empty:
+                print(f"Job '{job_name}' execution history:")
+                print(result.to_string(index=False))
+                return result
+            else:
+                print(f"No execution history found for job '{job_name}'.")
+                return None
+        except Exception as e:
+            print(f"Error getting job history for '{job_name}': {str(e)}")
+            return None
+
+    def get_job_logs(self, job_name: str, project_name: str = 'mindsdb'):
+        """
+        Get the logs of a specific job.
+        
+        Args:
+            job_name: Name of the job
+            project_name: Project name (defaults to 'mindsdb')
+        
+        Returns:
+            DataFrame or None: Job logs
+        """
+        if not self.project:
+            print("Error: MindsDB connection not established.")
+            return None
+        
+        try:
+            # Try different log table names as they might vary
+            queries = [
+                f"SELECT * FROM log.jobs WHERE project = '{project_name}' AND name = '{job_name}' ORDER BY created_at DESC;",
+                f"SELECT * FROM information_schema.jobs WHERE project = '{project_name}' AND name = '{job_name}';",
+                f"SELECT * FROM {project_name}.jobs WHERE name = '{job_name}';"
+            ]
+            
+            for query in queries:
+                try:
+                    result = self.execute_sql(query)
+                    if result is not None and not result.empty:
+                        print(f"Job '{job_name}' information:")
+                        print(result.to_string(index=False))
+                        return result
+                except:
+                    continue
+            
+            print(f"No detailed logs found for job '{job_name}'. Try checking job status or history.")
+            return None
+        except Exception as e:
+            print(f"Error getting job logs for '{job_name}': {str(e)}")
+            return None
+
+    def drop_job(self, job_name: str, project_name: str = None):
+        """
+        Drop/delete a MindsDB job.
+        
+        Args:
+            job_name: Name of the job to delete
+            project_name: Optional project name
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.project:
+            print("Error: MindsDB connection not established.")
+            return False
+        
+        job_full_name = f"{project_name}.{job_name}" if project_name else job_name
+        query = f"DROP JOB IF EXISTS {job_full_name};"
+        
+        try:
+            self.execute_sql(query)
+            print(f"Job '{job_name}' deleted successfully.")
+            return True
+        except Exception as e:
+            print(f"Error deleting job '{job_name}': {str(e)}")
+            return False
 # Keep the __main__ block for direct testing
 if __name__ == '__main__':
     print("Testing MindsDBHandler directly...")
