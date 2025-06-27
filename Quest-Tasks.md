@@ -31,7 +31,7 @@ Define [🔗 `metadata_columns`](https://docs.mindsdb.com/mindsdb_sql/knowledge-
 
 ---
 
-### - [ ] **🛠️ [10 pts] Integrate JOBS**
+### - [X] **🛠️ [10 pts] Integrate JOBS**
 
 Set up a [🔗 `MindsDB JOB`](https://docs.mindsdb.com/rest/jobs/create#create-a-job) that periodically checks a data source and inserts *new* data into the KB (using LAST or similar logic).
 
@@ -58,7 +58,7 @@ Write an article on DevTo, HashNode, Medium, or any blogging platform of your ch
 
 ---
 
-### - [ ] **✍️ [5 pts] Give feedback and suggest features**
+### - [X] **✍️ [5 pts] Give feedback and suggest features**
 
 You submit the [🔗 Product Feedback Form](https://quira-org.typeform.com/to/magewvh9). Extra points might be given here if you suggest really good features 😉
 
@@ -70,7 +70,7 @@ Projects that integrate [`CREATE Agent`](https://docs.mindsdb.com/mindsdb_sql/ag
 
 ---
 
-### - [ ] **🎁  [10 pts] Secret Challenge #2 --> Integrate `EVALUATE KNOWLEDGE_BASE`**
+### - [X] **🎁  [10 pts] Secret Challenge #2 --> Integrate `EVALUATE KNOWLEDGE_BASE`**
 
 _To be announced on June 24th, 2025_
 

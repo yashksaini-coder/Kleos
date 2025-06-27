@@ -337,3 +337,96 @@ def kb_query_agent(ctx, agent_name, question):
             click.echo(response) # Expecting a string response
     else:
         click.echo(click.style(f"Failed to get a response from agent '{agent_name}' or agent returned no data.", fg='yellow'))
+
+@kb_group.command('evaluate')
+@click.argument('kb_name')
+@click.option('--test-table', required=True, help="Test table name in 'datasource.table' format.")
+@click.option('--version', type=click.Choice(['doc_id', 'llm_relevancy'], case_sensitive=False), help="Evaluator version.")
+@click.option('--generate-data', 'generate_data_flag', is_flag=True, help="Generate test data using defaults (sets generate_data=true).")
+@click.option('--generate-data-from-sql', help="SQL query to fetch data for test data generation.")
+@click.option('--generate-data-count', type=int, help="Number of test data items to generate.")
+@click.option('--no-evaluate', 'run_evaluation_flag', is_flag=True, default=True, help="Set to only generate data without running evaluation (sets evaluate=false).") # default is True for run_evaluation
+@click.option('--llm-provider', help="LLM provider for evaluation (if version='llm_relevancy').")
+@click.option('--llm-api-key', help="API key for the LLM provider.")
+@click.option('--llm-model-name', help="LLM model name for evaluation.")
+@click.option('--llm-base-url', help="Base URL for the LLM provider.")
+@click.option('--llm-other-params', help="JSON string for other LLM parameters (e.g., '{\"method\":\"multi-class\"}').")
+@click.option('--save-to-table', help="Table to save evaluation results in 'datasource.table' format.")
+@click.pass_context
+def kb_evaluate(ctx, kb_name, test_table, version,
+                generate_data_flag, generate_data_from_sql, generate_data_count,
+                run_evaluation_flag, # This flag comes from --no-evaluate, so its presence means run_evaluation=False
+                llm_provider, llm_api_key, llm_model_name, llm_base_url, llm_other_params,
+                save_to_table):
+    """Evaluates a Knowledge Base using a test table and specified parameters."""
+    handler = ctx.obj
+    if not handler or not handler.project:
+        if not handler.connect() or not handler.project: # Try to connect
+            click.echo(click.style("MindsDB connection failed. Please ensure MindsDB is running and accessible.", fg='red'))
+            return
+
+    parsed_llm_other_params = None
+    if llm_other_params:
+        try:
+            parsed_llm_other_params = json.loads(llm_other_params)
+            if not isinstance(parsed_llm_other_params, dict):
+                raise ValueError("--llm-other-params must be a valid JSON dictionary.")
+        except json.JSONDecodeError as e:
+            click.echo(click.style(f"Invalid JSON in --llm-other-params: {e}", fg='red'))
+            return
+        except ValueError as e:
+            click.echo(click.style(str(e), fg='red'))
+            return
+
+    # --no-evaluate flag means run_evaluation should be False.
+    # Click sets run_evaluation_flag to True if --no-evaluate is present.
+    # So, we invert it for the handler.
+    actual_run_evaluation = not run_evaluation_flag if ctx.params.get('no_evaluate') else True
+    # A bit confusing: click's is_flag sets the param to True if present.
+    # If --no-evaluate is NOT given, run_evaluation_flag is False (its default from is_flag behavior if not set).
+    # We want run_evaluation to be True if --no-evaluate is NOT given.
+    # Correct logic: if --no-evaluate is passed, run_evaluation_flag becomes True. We want actual_run_evaluation = False.
+    # If --no-evaluate is NOT passed, run_evaluation_flag is False. We want actual_run_evaluation = True.
+    # The parameter name for is_flag is 'run_evaluation_flag', but the option is '--no-evaluate'.
+    # Let's rename the click option parameter to make it clearer.
+
+    # Re-evaluating the logic for --no-evaluate:
+    # If --no-evaluate is passed, the internal variable `run_evaluation_flag` (as named in @click.option)
+    # will be True. In this case, we want `actual_run_evaluation` to be False.
+    # If --no-evaluate is NOT passed, `run_evaluation_flag` will be False (its default).
+    # In this case, we want `actual_run_evaluation` to be True.
+    # So, actual_run_evaluation = not run_evaluation_flag (where run_evaluation_flag is the value from click)
+    # The default for the flag is False. If --no-evaluate is specified, it becomes True.
+    # So: actual_run_evaluation = not run_evaluation_flag (default True)
+    # Let's adjust the click option to be more direct.
+    # Let's use a new variable for the actual flag from click:
+    no_evaluate_is_set = ctx.params.get('run_evaluation_flag', False) # run_evaluation_flag is True if --no-evaluate is set
+    actual_run_evaluation_param = not no_evaluate_is_set
+
+
+    click.echo(f"Initiating evaluation for Knowledge Base '{kb_name}'...")
+    results_df = handler.evaluate_knowledge_base(
+        kb_name=kb_name,
+        test_table=test_table,
+        version=version,
+        generate_data_flag=generate_data_flag,
+        generate_data_from_sql=generate_data_from_sql,
+        generate_data_count=generate_data_count,
+        run_evaluation=actual_run_evaluation_param, # Correctly use the inverted flag
+        llm_provider=llm_provider,
+        llm_api_key=llm_api_key,
+        llm_model_name=llm_model_name,
+        llm_base_url=llm_base_url,
+        llm_other_params=parsed_llm_other_params,
+        save_to_table=save_to_table
+    )
+
+    if results_df is not None:
+        click.echo(click.style("Evaluation completed.", fg='green'))
+        if not results_df.empty:
+            click.echo("Results:")
+            click.echo(results_df.to_string())
+        else:
+            click.echo(click.style("Evaluation returned no data or results were saved to table.", fg='yellow'))
+    else:
+        click.echo(click.style("Failed to evaluate Knowledge Base or evaluation was set not to run explicitly.", fg='red'))

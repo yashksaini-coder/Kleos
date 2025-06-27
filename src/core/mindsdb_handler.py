@@ -718,6 +718,83 @@ class MindsDBHandler:
         except Exception as e:
             print(f"Error deleting job '{job_name}': {str(e)}")
             return False
+
+    def evaluate_knowledge_base(self, kb_name: str, test_table: str,
+                                version: str = None,
+                                generate_data_from_sql: str = None,
+                                generate_data_count: int = None,
+                                generate_data_flag: bool = False,
+                                run_evaluation: bool = True,
+                                llm_provider: str = None,
+                                llm_api_key: str = None,
+                                llm_model_name: str = None,
+                                llm_base_url: str = None,
+                                llm_other_params: dict = None, # For params like 'method'
+                                save_to_table: str = None):
+        if not self.project:
+            print("Error: MindsDB connection not established.")
+            return None
+
+        using_clauses = [f"test_table = {test_table}"] # test_table is like 'datasource.table'
+
+        if version:
+            using_clauses.append(f"version = '{version}'")
+
+        if generate_data_flag:
+            using_clauses.append("generate_data = true")
+        elif generate_data_from_sql or generate_data_count is not None:
+            gen_data_dict_parts = []
+            if generate_data_from_sql:
+                # SQL query string needs to be quoted within the JSON-like structure for SQL
+                escaped_sql = generate_data_from_sql.replace("'", "''")
+                gen_data_dict_parts.append(f"'from_sql': '''{escaped_sql}'''")
+            if generate_data_count is not None:
+                gen_data_dict_parts.append(f"'count': {generate_data_count}")
+            if gen_data_dict_parts:
+                using_clauses.append(f"generate_data = {{ {', '.join(gen_data_dict_parts)} }}")
+
+        if not run_evaluation: # if run_evaluation is False, then add 'evaluate = false'
+            using_clauses.append("evaluate = false")
+        # Otherwise, 'evaluate = true' is default in MindsDB, so we can omit it.
+
+        if llm_model_name: # LLM clause is only added if a model name is specified
+            llm_config_parts = [f"'model_name': '{llm_model_name}'"]
+            if llm_provider:
+                llm_config_parts.append(f"'provider': '{llm_provider}'")
+            if llm_api_key:
+                llm_config_parts.append(f"'api_key': '{llm_api_key}'")
+            if llm_base_url:
+                llm_config_parts.append(f"'base_url': '{llm_base_url.rstrip('/')}'")
+
+            if llm_other_params:
+                for key, value in llm_other_params.items():
+                    if isinstance(value, str):
+                        llm_config_parts.append(f"'{key}': '{str(value).replace("'", "''")}'")
+                    elif isinstance(value, (int, float, bool)):
+                         llm_config_parts.append(f"'{key}': {value}")
+                    else: # Attempt to JSON dump for complex types, though less common for LLM params here
+                        try:
+                            json_val = json.dumps(value)
+                            llm_config_parts.append(f"'{key}': '{json_val.replace("'", "''")}'")
+                        except TypeError:
+                             print(f"Warning: LLM parameter '{key}' could not be serialized. Skipping.")
+
+            using_clauses.append(f"llm = {{ {', '.join(llm_config_parts)} }}")
+
+        if save_to_table:
+            using_clauses.append(f"save_to = {save_to_table}") # save_to_table is like 'datasource.table'
+
+        query = f"EVALUATE KNOWLEDGE_BASE {kb_name} USING {', '.join(using_clauses)};"
+
+        try:
+            print(f"Executing evaluation for KB '{kb_name}'...")
+            result_df = self.execute_sql(query)
+            print(f"Evaluation for KB '{kb_name}' completed.")
+            return result_df
+        except Exception as e:
+            print(f"Error evaluating Knowledge Base '{kb_name}': {str(e)}")
+            return None
+
 # Keep the __main__ block for direct testing
 if __name__ == '__main__':
     print("Testing MindsDBHandler directly...")
