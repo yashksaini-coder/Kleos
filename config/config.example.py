@@ -5,6 +5,7 @@ MINDSDB_USER = '' # Optional: your MindsDB username
 MINDSDB_PASSWORD = '' # Optional: your MindsDB password
 
 # Google Gemini API Key
+GOOGLE_MODEL='gemini-2.0-flash'
 GOOGLE_GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY'
 
 # Ollama settings (if used directly, otherwise configured in MindsDB)
