@@ -25,7 +25,7 @@ Build a functional application (CLI, Web App, API, Bot Interface etc.) where the
 
 ---
 
-### - [X] **🛠️ [10 pts] Use metadata columns**  
+### - [X] **🛠️ [10 pts]  Use metadata columns**  
 
 Define [🔗 `metadata_columns`](https://docs.mindsdb.com/mindsdb_sql/knowledge-bases#metadata-columns) during ingestion and use `WHERE` clauses that combine semantic search with SQL attribute filtering on `metadata_columns`.
 
@@ -37,7 +37,7 @@ Set up a [🔗 `MindsDB JOB`](https://docs.mindsdb.com/rest/jobs/create#create-a
 
 ---
 
-### - [ ] **🛠️ [10 pts] Integrate with AI Tables or Agents**
+### - [X] **🛠️ [10 pts] Integrate with AI Tables or Agents**
 
 Build a multi-step workflow within MindsDB by taking the results from a KB semantic query and feeding them as input into another [🔗 `MindsDB AI Table`](https://docs.mindsdb.com/generative-ai-tables#what-are-generative-ai-tables) (e.g., for summarisation, classification, generation).
 
