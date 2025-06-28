@@ -2,25 +2,6 @@
 
 This document provides detailed information on all available CLI commands, their options, and platform-specific usage examples.
 
-## JSON Parameter Handling
-
-When passing complex parameters as JSON strings via options like `--metadata-map`, `--metadata-filter`, or `--agent-params`, ensure they are correctly quoted and escaped for your specific command-line shell.
-
-### Windows Command Prompt (`cmd.exe`)
-- Enclose the entire JSON string in double quotes (`"`)
-- Escape all inner double quotes with a backslash (`\"`)
-- Example: `--metadata-map "{\"key\":\"value\"}"`
-
-### PowerShell
-- Option 1: Use single quotes and escape inner double quotes with backslash
-- Example: `--metadata-map '{\"key\":\"value\"}'`
-- Option 2: Use double quotes and escape with backticks
-- Example: `--metadata-map "{`"key`":`"value`"}"`
-
-### Bash, Zsh (Linux/macOS)
-- Enclose the JSON string in single quotes (`'`)
-- Example: `--metadata-map '{"key":"value"}'`
-
 ---
 
 # Setup Commands
@@ -339,24 +320,327 @@ python main.py kb query-agent <agent_name> "<question>"
 ```bash
 # Basic agent query
 python main.py kb query-agent my_agent "What is the total number of stories ?"
+```
 
 ---
 
-## AI Commands
 
-### `ai chat` - Interactive chat with AI models
+### `kb evaluate` - Evaluate a Knowledge Base
 
-Start an interactive chat session with various AI models.
+Evaluates the relevancy and accuracy of documents returned by a Knowledge Base using a test dataset.
 
 **Usage:**
 ```bash
-python main.py ai chat --model <model_name> [options]
+python main.py kb evaluate <kb_name> --test-table <datasource.table_name> [options]
 ```
 
-**Arguments:**
-- `--model`: AI model to use
-- `--temperature`: Sampling temperature (optional)
-- `--max-tokens`: Maximum tokens in response (optional)
+**Required Arguments:**
+- `<kb_name>`: Name of the Knowledge Base to evaluate.
+- `--test-table <datasource.table_name>`: Name of the table containing test data (e.g., `my_tests.question_answers`). The structure depends on the `--version` chosen.
+
+**Optional Arguments:**
+
+**Evaluation Mode & Data Generation:**
+- `--version <version>`: Evaluator version. Choices: `doc_id` (checks if correct document ID is returned) or `llm_relevancy` (uses an LLM to rank/evaluate responses). Default: `doc_id`.
+- `--generate-data`: Flag to enable automatic test data generation using default settings (fetches from the KB being evaluated, default count 20).
+- `--generate-data-from-sql <sql_query>`: SQL query string to fetch data for test data generation (e.g., `"SELECT question, expected_doc_id FROM my_source.manual_tests"`).
+- `--generate-data-count <count>`: Number of test data items to generate if `--generate-data` or `--generate-data-from-sql` is used. Default: 20.
+- `--no-evaluate`: If set, only generates test data (if generation options are active) and saves it to `--test-table` without running the evaluation.
+
+**LLM Configuration (for `version = 'llm_relevancy'`):**
+- `--llm-provider <provider>`: LLM provider for evaluation (e.g., `gemini`, `openai`, `ollama`).
+- `--llm-model-name <model>`: Name of the LLM model to use for evaluation.
+- `--llm-api-key <key>`: API key for the LLM provider, if required.
+- `--llm-base-url <url>`: Base URL for the LLM provider (e.g., for local Ollama).
+- `--llm-other-params <json_string>`: JSON string for other LLM parameters (e.g., `'{"method": "multi-class"}'`).
+
+**Output:**
+- `--save-to-table <datasource.table_name>`: Table where evaluation results will be saved (e.g., `my_results.eval_output`). If not provided, results are printed to console but not saved to a table.
+
+**Examples:**
+
+1.  **Basic evaluation using `doc_id` version (test data already in `tests.kb_questions`):**
+    ```bash
+    python main.py kb evaluate my_knowledge_base --test-table tests.kb_questions
+    ```
+
+2.  **Generate test data and then evaluate using `doc_id` version:**
+    ```bash
+    python main.py kb evaluate my_knowledge_base \
+        --test-table tests.generated_eval_data \
+        --generate-data \
+        --generate-data-count 50
+    ```
+    *(This will first populate `tests.generated_eval_data` then evaluate against it)*
+
+3.  **Evaluate using `llm_relevancy` with a specific Google Gemini model:**
+    ```bash
+    # PowerShell/Bash/Zsh
+    python main.py kb evaluate my_knowledge_base \
+        --test-table tests.relevancy_questions \
+        --version llm_relevancy \
+        --llm-provider google \
+        --llm-model-name gemini-1.5-flash \
+        --llm-api-key "YOUR_GOOGLE_API_KEY" \
+        --save-to-table results_db.relevancy_eval_output
+    ```
+    ```cmd
+    REM Windows Command Prompt
+    python main.py kb evaluate my_knowledge_base 
+        --test-table tests.relevancy_questions 
+        --version llm_relevancy 
+        --llm-provider gemini 
+        --llm-model-name gemini-1.5-flash 
+        --llm-api-key "YOUR_GOOGLE_API_KEY" 
+        --save-to-table results_db.relevancy_eval_output
+    ```
+
+4.  **Only generate test data from a custom SQL query, do not evaluate:**
+    ```bash
+    python main.py kb evaluate my_knowledge_base \
+        --test-table tests.custom_questions_for_eval \
+        --generate-data-from-sql "SELECT id as question_id, query_text as question FROM source_data.benchmark_queries" \
+        --generate-data-count 100 \
+        --no-evaluate
+    ```
+
+---
+
+# AI Model Commands (`ai`)
+
+Commands for managing and querying AI Models that are trained on your data (often referred to as Generative AI Tables or AI Tables within MindsDB documentation, but presented as "models" in this CLI for broader understanding). These models are created using a `CREATE MODEL ... FROM (SELECT ...) ...` syntax, making them behave like queryable tables that can generate predictions or content.
+
+## `ai create-model` - Create an AI Model from Data
+
+Creates an AI Model by training it on data specified by a SELECT query.
+
+**Usage:**
+```bash
+python main.py ai create-model <model_name> --select-data-query "<query>" --predict-column <column_name> [options]
+```
+
+**Required Arguments:**
+- `<model_name>`: Name for the new AI Model.
+- `--select-data-query "<query>"`: SQL SELECT query to fetch training data. Enclose in quotes.
+  Example: `"SELECT text_content, category FROM my_datasource.training_set"`
+- `--predict-column <column_name>`: Name of the column the AI Model should learn to predict/generate.
+
+**Optional Arguments:**
+- `--project-name <name>`: MindsDB project where the AI Model will be created. Defaults to the currently connected project.
+- `--engine <engine_name>`: AI engine to use (e.g., `openai`, `google_gemini`, `anthropic`). Default: `openai`.
+- `--prompt-template "<template>"`: Prompt template for the AI Model. Use `{{column_name}}` for placeholders from your `--select-data-query`.
+  Example: `"Summarize the following article: {{text_content}}"`
+- `--param <key> <value>`: Additional `USING` parameters as key-value pairs for the model. Can be specified multiple times.
+  Example: `--param model_name gpt-3.5-turbo --param api_key YOUR_API_KEY`
+
+**Examples:**
+
+1.  **Create a story summarizer AI Model using OpenAI and HackerNews data:**
+    ```bash
+    # Ensure hackernews_db datasource exists (e.g., via `setup hackernews --name hackernews_db`)
+    # PowerShell/Bash/Zsh
+    python main.py ai create-model story_summarizer_model \
+        --select-data-query "SELECT title, text FROM hackernews_db.stories WHERE score > 5 AND text IS NOT NULL LIMIT 100" \
+        --predict-column summary \
+        --engine openai \
+        --prompt-template "Generate a concise summary for the following HackerNews story titled '{{title}}': {{text}}" \
+        --param api_key "YOUR_OPENAI_API_KEY" \
+        --param model_name "gpt-3.5-turbo"
+    ```
+    ```cmd
+    REM Windows Command Prompt
+    python main.py ai create-model story_summarizer_model ^
+        --select-data-query "SELECT title, text FROM hackernews_db.stories WHERE score > 5 AND text IS NOT NULL LIMIT 100" ^
+        --predict-column summary ^
+        --engine openai ^
+        --prompt-template "Generate a concise summary for the following HackerNews story titled '{{title}}': {{text}}" ^
+        --param api_key "YOUR_OPENAI_API_KEY" ^
+        --param model_name "gpt-3.5-turbo"
+    ```
+
+2.  **Create a sentiment classification AI Model using Google Gemini:**
+    ```bash
+    # PowerShell/Bash/Zsh
+    python main.py ai create-model product_sentiment_model \
+        --select-data-query "SELECT review_text, sentiment_label FROM my_data.product_reviews" \
+        --predict-column sentiment_label \
+        --engine google_gemini \
+        --prompt-template "Classify the sentiment of this product review: {{review_text}}. Sentiment should be one of: Positive, Negative, Neutral." \
+        --param api_key "YOUR_GOOGLE_API_KEY" \
+        --param model_name "gemini-1.5-flash"
+    ```
+    *(Ensure `GOOGLE_GEMINI_API_KEY` is available in your app config or environment if not passed via `--param api_key`)*
+
+## `ai list-models` - List AI Models
+
+Lists all AI Models in a specified project or the default connected project.
+
+**Usage:**
+```bash
+python main.py ai list-models [options]
+```
+
+**Optional Arguments:**
+- `--project-name <name>`: MindsDB project from which to list AI Models. Defaults to the currently connected project.
+
+**Example:**
+```bash
+python main.py ai list-models --project-name my_mindsdb_project
+# Lists AI Models in 'my_mindsdb_project'
+
+python main.py ai list-models
+# Lists AI Models in the default connected project
+```
+
+## `ai describe-model` - Describe an AI Model
+
+Shows details, schema, and status of a specific AI Model.
+
+**Usage:**
+```bash
+python main.py ai describe-model <model_name> [options]
+```
+
+**Required Arguments:**
+- `<model_name>`: Name of the AI Model to describe.
+
+**Optional Arguments:**
+- `--project-name <name>`: MindsDB project where the AI Model resides. Defaults to the currently connected project.
+
+**Example:**
+```bash
+python main.py ai describe-model story_summarizer_model --project-name my_mindsdb_project
+```
+
+## `ai drop-model` - Drop (Delete) an AI Model
+
+Deletes an AI Model from the specified project. This action is irreversible.
+
+**Usage:**
+```bash
+python main.py ai drop-model <model_name> [options]
+```
+
+**Required Arguments:**
+- `<model_name>`: Name of the AI Model to drop.
+
+**Optional Arguments:**
+- `--project-name <name>`: MindsDB project where the AI Model resides. Defaults to the currently connected project.
+
+**Example:**
+```bash
+python main.py ai drop-model old_text_classifier_model --project-name my_mindsdb_project
+# You will be prompted for confirmation.
+```
+
+## `ai refresh-model` - Refresh an AI Model
+
+Refreshes an AI Model. This typically involves retraining the model with the latest data from its original data source, using its original parameters (`RETRAIN model_name;` in SQL).
+
+**Usage:**
+```bash
+python main.py ai refresh-model <model_name> [options]
+```
+
+**Required Arguments:**
+- `<model_name>`: Name of the AI Model to refresh.
+
+**Optional Arguments:**
+- `--project-name <name>`: MindsDB project where the AI Model resides. Defaults to the currently connected project.
+
+**Example:**
+```bash
+python main.py ai refresh-model story_summarizer_model
+# Refreshes 'story_summarizer_model' in the default project
+```
+
+<!-- ## `ai retrain-model` - Retrain an AI Model with Options
+
+Retrains an AI Model, optionally allowing you to specify a new data query or new `USING` parameters for the model.
+
+**Usage:**
+```bash
+python main.py ai retrain-model <model_name> [options]
+```
+
+**Required Arguments:**
+- `<model_name>`: Name of the AI Model to retrain.
+
+**Optional Arguments:**
+- `--project-name <name>`: MindsDB project where the AI Model resides. Defaults to the currently connected project.
+- `--select-data-query "<query>"`: Optional new SQL SELECT query to fetch training data. If omitted, uses the model's original training query.
+- `--param <key> <value>`: Optional new `USING` parameters for retraining. Can be specified multiple times.
+
+**Examples:**
+
+1.  **Retrain with a new data query:**
+    ```bash
+    # PowerShell/Bash/Zsh
+    python main.py ai retrain-model product_sentiment_model \
+        --select-data-query "SELECT review_text, sentiment_label FROM my_data.all_product_reviews_v2"
+    ```
+
+2.  **Retrain with new parameters (e.g., change a hyperparameter if supported by the engine):**
+    ```bash
+    # PowerShell/Bash/Zsh
+    python main.py ai retrain-model story_summarizer_model \
+        --param temperature 0.85
+    ```
+    *(Note: Not all models/engines support changing all parameters on retrain. Check MindsDB engine documentation.)* -->
+
+
+## `ai query` - Execute a SQL Query (Typically for AI Models)
+
+Executes an arbitrary SQL query against the MindsDB project. This is commonly used to query AI Models by joining them with data tables or selecting from them with a `WHERE` clause that provides input to the model.
+
+**Usage:**
+```bash
+python main.py ai query "<query_string>" [options]
+```
+
+**Required Arguments:**
+- `<query_string>`: The SQL query to execute. Enclose in quotes.
+
+**Optional Arguments:**
+- `--project-name <name>`: MindsDB project context for the query. The query will execute in the context of the default connected project; this option is more for user clarity or if future versions support context switching. Ensure your query string fully qualifies table and model names with project names if they are not in the default project (e.g., `mindsdb.my_model` or `specific_project.my_model`).
+
+**Examples:**
+
+1.  **Query the `story_summarizer_model` AI Model by joining with HackerNews data:**
+    ```bash
+    # PowerShell/Bash/Zsh
+    # Assuming story_summarizer_model is in the 'mindsdb' project (default)
+    # and hnstories table is in 'hackernews_db' datasource.
+    python main.py ai query "SELECT hn.title, hn.text, hn.score, ai.summary FROM hackernews.hnstories AS hn JOIN mindsdb.story_summarizer AS ai WHERE hn.title IS NOT NULL LIMIT 2"
+    ```
+
+2.  **Query a sentiment classification AI Model directly (if it's structured for this pattern):**
+    ```bash
+    # PowerShell/Bash/Zsh
+    # Assuming sentiment_model is in 'my_project'
+    python main.py ai query "SELECT input_text, predicted_category FROM my_project.sentiment_model WHERE input_text = 'MindsDB makes AI development much easier!'"
+    ```
+
+---
+
+## JSON Parameter Handling
+
+When passing complex parameters as JSON strings via options like `--metadata-map`, `--metadata-filter`, or `--agent-params`, ensure they are correctly quoted and escaped for your specific command-line shell.
+
+### Windows Command Prompt (`cmd.exe`)
+- Enclose the entire JSON string in double quotes (`"`)
+- Escape all inner double quotes with a backslash (`\"`)
+- Example: `--metadata-map "{\"key\":\"value\"}"`
+
+### PowerShell
+- Option 1: Use single quotes and escape inner double quotes with backslash
+- Example: `--metadata-map '{\"key\":\"value\"}'`
+- Option 2: Use double quotes and escape with backticks
+- Example: `--metadata-map "{`"key`":`"value`"}"`
+
+### Bash, Zsh (Linux/macOS)
+- Enclose the JSON string in single quotes (`'`)
+- Example: `--metadata-map '{"key":"value"}'`
 
 ---
 
@@ -364,64 +648,14 @@ python main.py ai chat --model <model_name> [options]
 
 ### `job create` - Create a job for data processing
 
-**Arguments:**
-- `<job_name>`: Name of the job to create
-- `<sql_statements>`: SQL statements to execute (e.g., `SELECT * FROM hackernews.hnstories`)
-- `--project`: Project name where the job should be created (optional)
-- `--schedule`: Schedule interval for the job (optional, e.g., `EVERY 1 hour`, `EVERY 2 days`)
-- `--start-date`: Start date in format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS' (optional)
-- `--end-date`: End date in format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS' (optional)
-- `--if-condition`: Conditional statement - job only runs if this returns rows (optional)
+Creates a job for processing data with AI models.
 
 **Usage:**
 ```bash
-python main.py job create <job_name> <SQL commands> --project-name <project_name>  [options]
+python main.py job create <job_name> --model <model> --input <input_file> [options]
 ```
 
-**Example:**
-```bash
-python main.py job create manual_job "SELECT * FROM hackernews.hnstories" --project "mindsdb" --schedule "EVERY 1 DAY"
-```
-
-### `job drop` - Drop an existing job
-
-**Usage:**
-```bash
-python main.py job drop <job_name>
-```
-
-**Arguments:**
-- `<job_name>`: Name of the job to drop
-
-**Examples:**
-```bash
-python main.py job drop my_job
-```
-
-### `job list` - List all jobs
-
-**Usage:**
-```bash
-python main.py job list
-```
-### `job status` - Check the status of a job
-**Usage:**
-```bash 
-python main.py job status <job_name>
-```
-
-### `job history` - View job execution history
-**Usage:**
-```bash
-python main.py job history <job_name>
-```
-
-### `job logs` - View logs for a job
-**Usage:**
-```bash
-python main.py job logs <job_name>
-```
-
+---
 
 ## Best Practices
 

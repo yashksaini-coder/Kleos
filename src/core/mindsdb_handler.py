@@ -325,45 +325,324 @@ class MindsDBHandler:
             if "already exists" in str(e).lower(): print(f"Job '{job_name}' already exists."); return True
             print(f"Error creating job '{job_name}': {str(e)}"); return False
 
-    def create_ai_table(self, model_name: str, gemini_api_key: str = None, additional_using_params: dict = None):
-        if not self.project: print("Error: MindsDB connection not established."); return False
-        engine = additional_using_params.get('engine', 'google_gemini') if additional_using_params else 'google_gemini'
-        actual_api_key = None
-        if engine == 'google_gemini':
-            actual_api_key = additional_using_params.get('api_key', gemini_api_key) if additional_using_params else gemini_api_key
-            if not actual_api_key: print("Error: Google Gemini API key required for google_gemini engine."); return False
-        using_clause_parts = [f"engine = '{engine}'"]
-        if actual_api_key and engine == 'google_gemini':
-             using_clause_parts.append(f"api_key = '{actual_api_key}'")
-        if additional_using_params:
-            for key, value in additional_using_params.items():
-                if key.lower() not in ['engine', 'api_key']:
-                    if key == 'base_url' and isinstance(value, str): value = value.rstrip('/')
-                    if isinstance(value, str): using_clause_parts.append(f"{key} = '{value.replace("'", "''")}'")
-                    else: using_clause_parts.append(f"{key} = {value}")
-        query = f"CREATE MODEL {model_name} USING {', '.join(using_clause_parts)};"
-        try: self.execute_sql(query); print(f"AI Model '{model_name}' creation command executed."); return True
+    def list_models(self, project_name: str = None):
+        """Lists all models in the specified project, or the default project if None."""
+        if not self.project and not project_name:
+            print("Error: MindsDB connection not established and no project specified.")
+            return None
+
+        # Determine the target project name for the query
+        target_project = project_name if project_name else self.project.name
+        if not target_project: # Should not happen if self.project is valid or project_name is given
+            print("Error: Target project name could not be determined.")
+            return None
+
+        query = f"SHOW MODELS FROM {target_project};"
+        try:
+            models_df = self.execute_sql(query)
+            if models_df is not None and not models_df.empty:
+                return models_df
+            else:
+                print(f"No models found in project '{target_project}'.")
+                return pd.DataFrame() # Return empty DataFrame for consistency
+        except Exception as e:
+            print(f"Error listing models from project '{target_project}': {str(e)}")
+            return None
+
+    def describe_model(self, model_name: str, project_name: str = None):
+        """Describes a specific model in the specified project, or the default project."""
+        if not self.project and not project_name:
+            print("Error: MindsDB connection not established and no project specified.")
+            return None
+
+        target_project = project_name if project_name else self.project.name
+        if not target_project:
+            print("Error: Target project name could not be determined.")
+            return None
+
+        # DESCRIBE model_name (FROM project_name)
+        # The SDK's project.get_model(model_name).describe() might be an alternative way if direct SQL is problematic
+        # However, sticking to SQL for now.
+        # The syntax for DESCRIBE can vary. Some versions might need "DESCRIBE project_name.model_name"
+        # or "DESCRIBE model_name FROM project_name".
+        # MindsDB documentation suggests "DESCRIBE model_name" when project is default,
+        # or "DESCRIBE project_name.model_name". Let's try the latter for robustness.
+
+        # Standard SQL syntax for MindsDB is typically "DESCRIBE model_name;" if the project is already set,
+        # or "DESCRIBE project_name.model_name;"
+        # Another form is "DESCRIBE model_name FROM project_name;"
+        # Let's try "DESCRIBE project_name.model_name" first
+
+        qualified_model_name = f"{target_project}.{model_name}"
+        query = f"DESCRIBE {qualified_model_name};"
+
+        try:
+            description_df = self.execute_sql(query)
+            if description_df is not None and not description_df.empty:
+                return description_df
+            else:
+                # Try the "DESCRIBE model_name FROM project" syntax as a fallback
+                query_fallback = f"DESCRIBE {model_name};"
+                print(f"First describe attempt for '{qualified_model_name}' returned empty. Trying fallback: {query_fallback}")
+                description_df_fallback = self.execute_sql(query_fallback)
+                if description_df_fallback is not None and not description_df_fallback.empty:
+                    return description_df_fallback
+                else:
+                    print(f"Model '{model_name}' not found or no description available in project '{target_project}' using both syntaxes.")
+                    return pd.DataFrame() # Return empty DataFrame
+        except Exception as e:
+            # If the first query fails, try the fallback syntax before giving up
+            print(f"Error describing model '{qualified_model_name}' with initial query: {str(e)}. Trying fallback syntax.")
+            query_fallback = f"DESCRIBE {model_name};"
+            try:
+                description_df_fallback = self.execute_sql(query_fallback)
+                if description_df_fallback is not None and not description_df_fallback.empty:
+                    return description_df_fallback
+                else:
+                    print(f"Fallback describe for '{model_name}' also returned empty or failed.")
+                    return pd.DataFrame()
+            except Exception as e_fallback:
+                print(f"Error describing model '{model_name}' with fallback query: {str(e_fallback)}")
+                return None
+
+    def drop_model(self, model_name: str, project_name: str = None):
+        """Drops/deletes a model from the specified project, or the default project."""
+        if not self.project and not project_name:
+            print("Error: MindsDB connection not established and no project specified.")
+            return False
+
+        target_project = project_name if project_name else self.project.name
+        if not target_project:
+            print("Error: Target project name could not be determined.")
+            return False
+
+        # Standard SQL syntax for MindsDB is "DROP MODEL project_name.model_name;"
+        # or "DROP MODEL model_name;" if project is current context
+        qualified_model_name = f"{target_project}.{model_name}"
+        query = f"DROP MODEL {qualified_model_name};"
+
+        try:
+            self.execute_sql(query)
+            print(f"Model '{qualified_model_name}' dropped successfully.")
+            return True
+        except Exception as e:
+            # Check if error indicates model doesn't exist, which can be considered success for a drop command
+            err_str = str(e).lower()
+            if "not found" in err_str or "doesn't exist" in err_str:
+                print(f"Model '{qualified_model_name}' not found, so it's already considered dropped.")
+                return True
+            print(f"Error dropping model '{qualified_model_name}': {str(e)}")
+            return False
+
+    def refresh_model(self, model_name: str, project_name: str = None):
+        """Refreshes (retrains with new data from the original source) a model."""
+        if not self.project and not project_name:
+            print("Error: MindsDB connection not established and no project specified.")
+            return False
+
+        target_project = project_name if project_name else self.project.name
+        if not target_project:
+            print("Error: Target project name could not be determined.")
+            return False
+
+        qualified_model_name = f"{target_project}.{model_name}"
+        # The command for this is typically RETRAIN, but the SDK might have a 'refresh' concept
+        # or it might be a specific SQL syntax like "REFRESH model_name" or "RETRAIN model_name"
+        # Based on MindsDB docs, RETRAIN is used. Let's assume REFRESH is an alias or specific type of retrain.
+        # The user request was "refresh_model", so we stick to that terminology.
+        # For MindsDB, `RETRAIN model_name` is the common command.
+        # Some engines might support `REFRESH model_name` for specific types of updates.
+        # Let's use `RETRAIN` as it's more general for now and matches SDK behavior for full retraining.
+        query = f"RETRAIN {qualified_model_name};" # Using RETRAIN as it's standard
+
+        try:
+            self.execute_sql(query)
+            print(f"Model '{qualified_model_name}' refresh (retrain) process initiated.")
+            # Optionally, check status after a delay
+            time.sleep(2) # Give MindsDB a moment to start the process
+            try:
+                # Attempt to get status more directly or robustly
+                status_query = f"SELECT status FROM {target_project}.models WHERE name = '{model_name}';"
+                status_df = self.execute_sql(status_query)
+                if status_df is not None and not status_df.empty and 'status' in status_df.columns:
+                    status = status_df['status'].iloc[0]
+                    print(f"Model '{qualified_model_name}' status after refresh initiation: {status}")
+                    # Consider 'training', 'generating', 'complete' as successful initiation
+                    if status and status.lower() in ['training', 'generating', 'complete', 'active']: # 'active' can also be a valid status
+                        return True
+                else:
+                    # Fallback to describe if direct status query fails or returns unexpected
+                    model_desc = self.describe_model(model_name, project_name=target_project)
+                    if model_desc is not None and not model_desc.empty:
+                        # Try to find 'STATUS' in the first column of describe output more flexibly
+                        status_row = model_desc[model_desc.iloc[:, 0].astype(str).str.upper() == 'STATUS']
+                        if not status_row.empty:
+                            status = status_row.iloc[0, 1] # Assuming value is in the second column
+                            print(f"Model '{qualified_model_name}' status (via describe) after refresh initiation: {status}")
+                            if status and status.lower() in ['training', 'generating', 'complete', 'active']:
+                                return True
+                        else:
+                            print(f"Could not determine status for '{qualified_model_name}' via describe after refresh.")
+            except Exception as status_e:
+                print(f"Could not verify status for '{qualified_model_name}' after refresh: {status_e}. Assuming initiation was successful if command didn't error.")
+
+            return True # Assume success if RETRAIN command executes without error, status check is best-effort
+        except Exception as e:
+            print(f"Error refreshing model '{qualified_model_name}': {str(e)}")
+            return False
+
+    # def retrain_model_custom(self, model_name: str, project_name: str = None, select_data_query: str = None, using_params: dict = None):
+    #     """
+    #     Retrains an existing model, potentially with a new SELECT query or new USING parameters.
+    #     If select_data_query is None, it retrains with original parameters (similar to REFRESH).
+    #     If using_params are provided, they are typically for fine-tuning parameters if the engine supports them on retrain.
+    #     MindsDB SQL syntax for this is: RETRAIN model_name [FROM project_name] [(new_select_query)] [USING new_params];
+    #     """
+    #     if not self.project and not project_name:
+    #         print("Error: MindsDB connection not established and no project specified.")
+    #         return False
+
+    #     target_project = project_name if project_name else self.project.name
+    #     if not target_project:
+    #         print("Error: Target project name could not be determined.")
+    #         return False
+
+    #     qualified_model_name = f"{target_project}.{model_name}"
+
+    #     retrain_parts = [f"RETRAIN {qualified_model_name}"]
+
+    #     if select_data_query:
+    #         # Ensure the FROM project_name part is handled correctly if the select_data_query doesn't qualify tables
+    #         # The syntax is RETRAIN project.model FROM project (SELECT ...);
+    #         # However, if the select_data_query already refers to tables like project.datasource.table, it might be redundant.
+    #         # For now, let's assume select_data_query is complete or uses the default project context correctly.
+    #         # The standard syntax is `RETRAIN model_name FROM integration (SELECT ...)`
+    #         # Or `RETRAIN model_name (SELECT ... FROM integration.table)`
+    #         # The provided SDK doc implies `model.retrain(select='SELECT ...')`
+    #         # Let's try to match SQL `RETRAIN model_name (SELECT ...)`
+    #         retrain_parts.append(f"({select_data_query})")
+
+    #     if using_params:
+    #         using_clause_parts = []
+    #         for key, value in using_params.items():
+    #             if isinstance(value, str):
+    #                 escaped_value = value.replace("'", "''")
+    #                 using_clause_parts.append(f"{key} = '{escaped_value}'")
+    #             elif isinstance(value, (int, float, bool)):
+    #                 using_clause_parts.append(f"{key} = {value}")
+    #             else:
+    #                 using_clause_parts.append(f"{key} = {str(value)}") # Might need more care for complex types
+    #         if using_clause_parts:
+    #             retrain_parts.append(f"USING {', '.join(using_clause_parts)}")
+
+    #     query = " ".join(retrain_parts) + ";"
+
+    #     try:
+    #         self.execute_sql(query)
+    #         print(f"Model '{qualified_model_name}' custom retrain process initiated with query: {query}")
+    #         time.sleep(2) # Give MindsDB a moment to start the process
+    #         try:
+    #             # Attempt to get status more directly or robustly
+    #             status_query = f"SELECT status FROM {target_project}.models WHERE name = '{model_name}';"
+    #             status_df = self.execute_sql(status_query)
+    #             if status_df is not None and not status_df.empty and 'status' in status_df.columns:
+    #                 status = status_df['status'].iloc[0]
+    #                 print(f"Model '{qualified_model_name}' status after retrain initiation: {status}")
+    #                 if status and status.lower() in ['training', 'generating', 'complete', 'active']:
+    #                     return True
+    #             else:
+    #                  # Fallback to describe if direct status query fails or returns unexpected
+    #                 model_desc = self.describe_model(model_name, project_name=target_project)
+    #                 if model_desc is not None and not model_desc.empty:
+    #                     status_row = model_desc[model_desc.iloc[:, 0].astype(str).str.upper() == 'STATUS']
+    #                     if not status_row.empty:
+    #                         status = status_row.iloc[0, 1]
+    #                         print(f"Model '{qualified_model_name}' status (via describe) after retrain initiation: {status}")
+    #                         if status and status.lower() in ['training', 'generating', 'complete', 'active']:
+    #                             return True
+    #                     else:
+    #                         print(f"Could not determine status for '{qualified_model_name}' via describe after retrain.")
+    #         except Exception as status_e:
+    #             print(f"Could not verify status for '{qualified_model_name}' after retrain: {status_e}. Assuming initiation was successful if command didn't error.")
+
+    #         return True # Assume success if RETRAIN command executes without error, status check is best-effort
+    #     except Exception as e:
+    #         print(f"Error initiating custom retrain for model '{qualified_model_name}': {str(e)}")
+    #         print(f"Attempted query: {query}")
+    #         return False
+
+    # Renamed from create_generative_ai_table, then to create_model_from_query for consistency
+    def create_model_from_query(self, model_name: str, project_name: str, select_data_query: str, predict_column: str, using_params: dict):
+        """
+        Creates an AI Model that learns from data specified by a SELECT query.
+        This corresponds to the "AI Table" concept where a model is trained on tabular data.
+        Example: CREATE MODEL my_model FROM my_project (SELECT text_col, label_col FROM my_data) PREDICT label_col USING engine='openai', prompt_template='...';
+        """
+        if not self.project:
+            print("Error: MindsDB connection not established.")
+            return False
+
+        using_clause_parts = []
+        for key, value in using_params.items():
+            if isinstance(value, str):
+                # Escape single quotes in string values
+                escaped_value = value.replace("'", "''")
+                using_clause_parts.append(f"{key} = '{escaped_value}'")
+            elif isinstance(value, (int, float, bool)):
+                using_clause_parts.append(f"{key} = {value}")
+            else:
+                # For other types, attempt to convert to string; might need specific handling for lists/dicts if they are complex
+                using_clause_parts.append(f"{key} = {str(value)}")
+
+        using_statement = ""
+        if using_clause_parts:
+            using_statement = f"USING {', '.join(using_clause_parts)}"
+
+        # If select_data_query is like "datasource.tablename", it should be wrapped in SELECT * FROM datasource.tablename
+        # However, the user is expected to provide a full SELECT query for flexibility.
+        # Ensure the project name is part of the FROM clause if not already included by the user in select_data_query
+        # A robust way is to let the user specify the full FROM clause like "my_integration.my_table" or "my_project.my_integration.my_table"
+
+        # The f-string for query was previously causing issues if not careful with newlines and indentation.
+        # Ensuring it's clean and correctly formatted.
+        query = f"""CREATE MODEL {model_name}
+FROM {project_name} ({select_data_query})
+PREDICT {predict_column}
+{using_statement};"""
+
+        try:
+            self.execute_sql(query)
+            print(f"AI Model '{model_name}' creation command executed. Verifying model registration...")
+
+            time.sleep(10) # Increased sleep time slightly
+
+            # Simplified verification: Check if the model can be described.
+            model_description_df = self.describe_model(model_name=model_name, project_name=project_name)
+
+            if model_description_df is not None and not model_description_df.empty:
+                print(f"AI Model '{model_name}' successfully registered and is describable.")
+                # Optionally, could print a snippet of the description or its status if available
+                status_row = model_description_df[model_description_df.iloc[:, 0].astype(str).str.upper() == 'STATUS']
+                if not status_row.empty:
+                    status = status_row.iloc[0, 1]
+                    print(f"Initial status of '{model_name}': {status}")
+                return True
+            else:
+                print(f"AI Model '{model_name}' not found or not describable shortly after creation command. It might be still pending or failed to register. Please check with 'ai describe-model'.")
+                # Check if it's in list_models as a last resort, could be an intermittent describe issue
+                models_df = self.list_models(project_name=project_name)
+                if models_df is not None and model_name in models_df['name'].values:
+                    print(f"Model '{model_name}' found in list_models, so creation likely initiated. Describe might be slow.")
+                    return True # Consider it a soft success if listed.
+                print(f"Model '{model_name}' also not found in list_models.")
+                return False
         except Exception as e:
             err_str = str(e).lower()
             if "already exists" in err_str or "already created" in err_str:
-                print(f"AI Model '{model_name}' already exists."); return True
-            print(f"Error creating AI Model '{model_name}': {str(e)}"); return False
-
-    def query_ai_table(self, model_name: str, text_to_process: str, classification_prompt: str = None):
-        if not self.project: print("Error: MindsDB connection not established."); return None
-        final_input_text = text_to_process
-        if classification_prompt:
-            if "{text}" in classification_prompt: final_input_text = classification_prompt.replace("{text}", text_to_process)
-            else: final_input_text = f"{classification_prompt} Text: {text_to_process}"
-        sanitized_input = final_input_text.replace("'", "''")
-        query = f"SELECT response FROM {model_name} WHERE prompt='{sanitized_input}';"
-        try:
-            results_df = self.execute_sql(query)
-            if results_df is not None and not results_df.empty and 'response' in results_df.columns:
-                return results_df['response'].iloc[0] if len(results_df['response']) > 0 else None
-            elif results_df is not None: print("AI Model query returned no response."); return None
-            else: print("AI Model query failed to return DataFrame."); return None
-        except Exception as e: print(f"Error querying AI Model '{model_name}': {str(e)}"); return None
+                print(f"AI Model '{model_name}' already exists.")
+                return True
+            print(f"Error during AI Model '{model_name}' creation process: {str(e)}")
+            return False
 
     # --- New AI Agent Methods ---
     def create_kb_agent(self,
