@@ -1,5 +1,7 @@
 # MindsDB CLI & Knowledge Base Toolkit
 
+![image](https://github.com/user-attachments/assets/cc9acd6d-db6b-4d1f-b0f0-9c82d25e1de8)
+
 [![MindsDB](https://img.shields.io/badge/Powered%20by-MindsDB-blue)](https://mindsdb.com)
 
 This project provides a powerful Command Line Interface (CLI) for interacting with MindsDB, with a special focus on its Knowledge Base features and AI Agent integration. It also includes a suite of scripts for performance benchmarking, stress testing, and evaluating MindsDB's reranking capabilities.
