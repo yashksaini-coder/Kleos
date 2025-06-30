@@ -11,3 +11,8 @@ ENV/
 env.bak/
 venv.bak/
 config/config.py
+
+*.egg-info/
+*.egg
+*build/
+*.dist-info/

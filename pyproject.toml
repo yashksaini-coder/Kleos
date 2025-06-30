@@ -1,7 +1,86 @@
 [project]
 name = "kleos"
 version = "0.1.0"
-description = "Add your description here"
+description = "A CLI toolkit for interacting with MindsDB, focusing on Knowledge Bases, AI Agents, and AI Models."
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = []
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Yash K. Saini", email = "ys3853428@gmail.com"}
+]
+keywords = ["mindsdb", "cli", "ai", "knowledge base", "llm", "database"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Utilities",
+]
+
+dependencies = [
+    "mindsdb-sdk", # Match MindsDB version for features
+    "click",
+    "pandas",
+    "rich",
+    "python-dotenv", # For loading .env files if used
+    "importlib-metadata; python_version<'3.8'", # For reading package version in older Python
+]
+
+[project.urls]
+Homepage = "https://github.com/yashksaini-coder/Kleos"
+Repository = "https://github.com/yashksaini-coder/Kleos"
+"Issue Tracker" = "https://github.com/yashksaini-coder/Kleos/issues"
+# Documentation = "URL_TO_YOUR_DOCS_IF_HOSTED_ELSEWHERE"
+
+[project.scripts]
+kleos = "main:cli"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."] # Looks for packages in current directory
+include = ["src*", "config*"] # Include necessary packages/modules
+
+[tool.setuptools.package-data]
+kleos = ["py.typed"]
+config = ["*.py"] # if config.py is needed
+# Add other package data if necessary, e.g. example files
+
+[tool.ruff]
+line-length = 120
+select = ["E", "F", "W", "I", "UP", "C90", "N", "D", "S", "A", "B", "TID", "RUF"]
+ignore = ["D203", "D212", "D213", "D407", "D416"] # Based on personal preference/common ignores
+
+[tool.ruff.pydocstyle]
+convention = "google"
+
+[tool.ruff.isort]
+known-first-party = ["kleos", "src", "config"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true # Can be strict later
+# exclude = ['venv'] # if you want mypy to ignore venv folder
+
+# If you have type stubs for libraries that don't have them
+# [tool.mypy]
+# mypy_path = "stubs"
+#
+# [[tool.mypy.overrides]]
+# module = [
+# "some_untyped_dependency.*"
+# ]
+# ignore_missing_imports = true

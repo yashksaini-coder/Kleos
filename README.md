@@ -7,6 +7,8 @@
 
 This project provides a powerful and interactive, Command Line Interface (CLI) for interacting with MindsDB, with a special focus on its Knowledge Base features and AI Agent integration. It also includes a suite of scripts for performance benchmarking, stress testing, and evaluating MindsDB's reranking capabilities.
 
+To know learn more about the commands and advanced usage, please refer to the [**COMMANDS_REFERENCE.md**](./COMMANDS_REFERENCE.md) file.
+
 ## Features
 
 *   **Enhanced CLI (`kleos`)**:
