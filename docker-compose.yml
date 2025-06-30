@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  mindsdb:
+    image: mindsdb/mindsdb:latest
+    container_name: mindsdb_instance
+    ports:
+      - "47334:47334" # HTTP API
+      - "47335:47335" # MySQL API (optional, if you connect via MySQL client)
+    volumes:
+      - mindsdb_data:/var/lib/mindsdb # Persist MindsDB data
+    environment:
+      - MINDSDB_CONFIG_PATH=/var/lib/mindsdb/config.json # Optional: if you need a custom config
+      # Add any other MindsDB specific environment variables if needed
+    networks:
+      - kleos_network
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama_instance
+    ports:
+      - "11434:11434" # Ollama API
+    volumes:
+      - ollama_data:/root/.ollama # Persist Ollama models and data
+    environment:
+      # - OLLAMA_DEBUG=1 # Uncomment for more verbose logging from Ollama
+      - OLLAMA_HOST=0.0.0.0 # Ensure Ollama listens on all interfaces within the container
+      # OLLAMA_MODELS: /root/.ollama/models # Default, usually not needed to set
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all # Use all available GPUs. Change to specific count or device IDs if needed.
+              capabilities: [gpu] # Ensure nvidia-container-toolkit is installed on the host
+    networks:
+      - kleos_network
+    restart: unless-stopped
+    # Note: Pulling specific models like nomic-embed-text and llama3
+    # is best done after the container is up and running using 'docker exec'.
+    # Alternatively, you could build a custom Dockerfile FROM ollama/ollama
+    # that runs these pull commands. For simplicity, we'll document the exec method.
+
+volumes:
+  mindsdb_data:
+  ollama_data:
+
+networks:
+  kleos_network:
+    driver: bridge
