@@ -4,6 +4,95 @@ This document provides detailed information on all available Kleos CLI commands,
 
 ---
 
+# Utility Commands
+
+General utility commands for the Kleos CLI.
+
+## `cls`
+
+Clears the terminal screen.
+This command is os-dependent and uses 'cls' on Windows and 'clear' on Unix-like systems.
+
+**Usage:**
+```bash
+kleos cls
+```
+
+**Options:**
+
+| Option       | Description                 |
+|--------------|-----------------------------|
+| `-h, --help` | Show help message and exit. |
+
+*(This command takes no other options or arguments besides help.)*
+
+---
+
+## `info`
+
+Displays version, description, and project information for Kleos CLI.
+
+Provides details about the current version of the Kleos tool, its main purpose and description (including the '`telos`' quote), and a link to the project's GitHub repository.
+
+**Usage:**
+```bash
+kleos info
+```
+
+**Options:**
+
+| Option       | Description                 |
+|--------------|-----------------------------|
+| `-h, --help` | Show help message and exit. |
+
+*(This command takes no other options or arguments besides help.)*
+
+**Example Output (structure and style, content may vary slightly):**
+![](./public/Kleos%20Info%20Banner.jpeg)
+---
+
+## `about`
+
+Displays information about the author of the Kleos CLI.
+
+Provides details about the author, including their name, a short bio, and links to their GitHub profile and sponsorship page.
+
+**Usage:**
+```bash
+kleos about
+```
+
+**Options:**
+
+| Option       | Description                 |
+|--------------|-----------------------------|
+| `-h, --help` | Show help message and exit. |
+
+*(This command takes no other options or arguments besides help.)*
+
+**Example Output (structure and style, content may vary slightly):**
+![](./public/Kleos%20About%20Banner.jpeg)
+
+---
+
+## JSON Parameter Handling
+
+When passing complex parameters as JSON strings via options like `--metadata-map` (in `kb ingest`), `--metadata-filter` (in `kb query`), or `--other-params` (in `kb create-agent`), ensure they are correctly quoted and escaped for your specific command-line shell. Incorrect quoting is a common source of errors.
+
+*   **For Windows Command Prompt (`cmd.exe`):**
+    Enclose the entire JSON string in double quotes (`"`) and escape all inner double quotes with a backslash (`\"`).
+    Example: `kleos kb query mykb "test" --metadata-filter "{\"author\":\"John Doe\"}"`
+
+*   **For Linux/macOS (bash, zsh) or PowerShell:**
+    Often, enclosing the JSON string in single quotes (`'`) is sufficient.
+    Example: `kleos kb query mykb "test" --metadata-filter '{"author":"John Doe"}'`
+
+    If your JSON itself contains single quotes, you might need to use double quotes for the outer layer and escape inner double quotes, or use more advanced shell quoting techniques.
+
+Refer to your shell's documentation for robust quoting mechanisms if you encounter issues.
+
+---
+
 # Setup Commands (`setup`)
 
 Commands for initial setup and project configuration.
@@ -33,6 +122,8 @@ kleos setup hackernews [OPTIONS]
 ```bash
 kleos setup hackernews --name my_hackernews_source
 ```
+
+![](./public/Kleos%20setup.jpeg)
 
 
 ---
@@ -96,6 +187,8 @@ Create a KB with Google's gemini and an Ollama Llama3 embedding:
 kleos kb create gemini_ollama_kb --embedding-provider ollama --embedding-model nomic-embed-text --reranking-provider Google --reranking-model gemini-2.0-flash --gemini-api-key YOUR_GEMINI_KEY --content-columns "question,answer"
 ```
 
+![](./public/Kleos%20KB%20create%20Execute.jpeg)
+
 ---
 
 ## `kb index <kb_name>`
@@ -126,6 +219,9 @@ kleos kb index <kb_name> [OPTIONS]
 kleos kb index my_docs_kb
 ```
 
+>[!NOTE]
+> If the KB is large, indexing may take some time. You can check the status of the index creation in MindsDB's UI or logs.
+> KB indexing does not support default chromadb vector stores as these are managed internally and created by MindsDB.
 ---
 
 ## `kb ingest <kb_name>`
@@ -170,6 +266,7 @@ kleos kb ingest my_hn_kb --from-hackernews stories --content-column "title" \
 ```
 *(Note on JSON parameters: Ensure correct quoting for your shell as described in the main README)*
 
+![](./public/Kleos%20KB%20ingest%20Execute.jpeg)
 ---
 
 ## `kb query <kb_name> <query_text>`
@@ -240,17 +337,8 @@ kleos kb list-databases [OPTIONS]
 | `-h, --help` | Show help message and exit. |
 
 **Example Output (example, actual output may vary):**
-```
-Available Databases/Datasources:
-┏━━━━━━━━━━━━━━━━━━━━━━┓
-┃ name                 ┃
-┡━━━━━━━━━━━━━━━━━━━━━━┩
-│ information_schema   │
-│ mindsdb              │
-│ my_hackernews_source │
-│ another_ds           │
-└──────────────────────┘
-```
+![](./public/Kleos%20List%20Databases%20Execute.jpeg)
+
 
 ---
 
@@ -288,8 +376,9 @@ kleos kb create-agent <agent_name> --model-name <model_name> --include-knowledge
 Create an agent using Google Gemini and linked to KBs:
 ```bash
 # Ensure GOOGLE_GEMINI_API_KEY is in your .env or provide --google-api-key
-kleos kb create-agent my_kb_assistant --model-name gemini-1.5-flash \
+kleos kb create-agent my_kb_assistant --model-name gemini-2.0-flash \
   --include-knowledge-bases "product_docs_kb,faq_kb" \
+  --include-tables "product_db.products,faq_db.faq_entries" \
   --prompt-template "Answer based on provided documents: {{question}}"
 ```
 
@@ -493,6 +582,7 @@ List models in the current project:
 kleos ai list-models
 ```
 
+![](./public/Kleos%20AI%20list-model%20Exeucte.jpeg)
 ---
 
 ## `ai describe-model <model_name>`
@@ -524,6 +614,7 @@ kleos ai describe-model <model_name> [OPTIONS]
 kleos ai describe-model news_summarizer --project-name my_nlp_project
 ```
 
+![](./public/Kleos%20AI%20describe-model%20Exeucte.jpeg)
 ---
 
 ## `ai drop-model <model_name>`
@@ -555,6 +646,8 @@ kleos ai drop-model <model_name> [OPTIONS]
 kleos ai drop-model old_text_classifier --project-name my_nlp_project
 ```
 *(You will be prompted: "Are you sure you want to drop this AI Model? This action is irreversible.")*
+
+![](./public/Kleos%20AI%20drop-model%20Exeucte.jpeg)
 
 ---
 
@@ -697,6 +790,7 @@ List jobs in the current project:
 kleos job list
 ```
 
+![](./public/Kleos%20Jobs.jpeg)
 ---
 
 ## `job status <job_name>`
@@ -728,6 +822,8 @@ kleos job status <job_name> [OPTIONS]
 kleos job status daily_hackernews_refresh --project my_automations
 ```
 
+![](./public/Kleos%20Jobs%20status%20Execute.jpeg)
+
 ---
 
 ## `job history <job_name>`
@@ -741,6 +837,8 @@ Shows records of past job runs, including start time, end time, status, and any 
 ```bash
 kleos job history <job_name> [OPTIONS]
 ```
+
+![](./public/Kleos%20Jobs%20History%20Execute.jpeg)
 
 **Arguments:**
 
@@ -829,6 +927,8 @@ kleos job logs <job_name> [OPTIONS]
 kleos job logs daily_hackernews_refresh
 ```
 
+![](./public/Kleos%20Jobs%20Logs%20Execute.jpeg)
+
 ---
 
 ## `job drop <job_name>`
@@ -861,115 +961,16 @@ kleos job drop my_nightly_ingest
 ```
 *(You will be prompted: "Are you sure you want to drop this job? This action is irreversible.")*
 
----
-
-# Utility Commands
-
-General utility commands for the Kleos CLI.
-
-## `cls`
-
-Clears the terminal screen.
-This command is os-dependent and uses 'cls' on Windows and 'clear' on Unix-like systems.
-
-**Usage:**
-```bash
-kleos cls
-```
-
-**Options:**
-
-| Option       | Description                 |
-|--------------|-----------------------------|
-| `-h, --help` | Show help message and exit. |
-
-*(This command takes no other options or arguments besides help.)*
-
----
-
-## `info`
-
-Displays version, description, and project information for Kleos CLI.
-
-Provides details about the current version of the Kleos tool, its main purpose and description (including the '`telos`' quote), and a link to the project's GitHub repository.
-
-**Usage:**
-```bash
-kleos info
-```
-
-**Options:**
-
-| Option       | Description                 |
-|--------------|-----------------------------|
-| `-h, --help` | Show help message and exit. |
-
-*(This command takes no other options or arguments besides help.)*
-
-**Example Output (structure and style, content may vary slightly):**
-```
-╭───────────────────── Kleos CLI Information ──────────────────────╮
-│                                                                    │
-│       Version: 0.1.0 (local)                                       │
-│   Description: Every system has its `telos´ — its final cause.    │
-│                This CLI fulfills the purpose of MindsDB's          │
-│                Knowledge Base: to seek, structure, and serve       │
-│                insight through intelligent agents.                 │
-│    Repository: https://github.com/yashksaini-coder/Kleos           │
-│    Powered by: MindsDB                                             │
-│                                                                    │
-╰────────────────────────────────────────────────────────────────────╯
-```
-
----
-
-## `about`
-
-Displays information about the author of the Kleos CLI.
-
-Provides details about the author, including their name, a short bio, and links to their GitHub profile and sponsorship page.
-
-**Usage:**
-```bash
-kleos about
-```
-
-**Options:**
-
-| Option       | Description                 |
-|--------------|-----------------------------|
-| `-h, --help` | Show help message and exit. |
-
-*(This command takes no other options or arguments besides help.)*
-
-**Example Output (structure and style, content may vary slightly):**
+![](./public/Kleos%20Jobs%20Drop%20Execute.jpeg)
 
 
 ---
 
-## JSON Parameter Handling
-
-When passing complex parameters as JSON strings via options like `--metadata-map` (in `kb ingest`), `--metadata-filter` (in `kb query`), or `--other-params` (in `kb create-agent`), ensure they are correctly quoted and escaped for your specific command-line shell. Incorrect quoting is a common source of errors.
-
-*   **For Windows Command Prompt (`cmd.exe`):**
-    Enclose the entire JSON string in double quotes (`"`) and escape all inner double quotes with a backslash (`\"`).
-    Example: `kleos kb query mykb "test" --metadata-filter "{\"author\":\"John Doe\"}"`
-
-*   **For Linux/macOS (bash, zsh) or PowerShell:**
-    Often, enclosing the JSON string in single quotes (`'`) is sufficient.
-    Example: `kleos kb query mykb "test" --metadata-filter '{"author":"John Doe"}'`
-
-    If your JSON itself contains single quotes, you might need to use double quotes for the outer layer and escape inner double quotes, or use more advanced shell quoting techniques.
-
-Refer to your shell's documentation for robust quoting mechanisms if you encounter issues.
-
----
-
-## Best Practices & Troubleshooting
+# Best Practices & Troubleshooting
 
 (This section can be expanded or refined based on common user feedback)
 
-### Best Practices
+## Best Practices
 1.  **Use Virtual Environments**: Always use a Python virtual environment (`venv`, `conda`, `uv venv`) when working with Kleos and its dependencies.
 2.  **Start Small**: When ingesting data or training models, start with small limits or datasets (`--limit 10`) to verify configurations before running large jobs.
 3.  **Descriptive Naming**: Use clear, descriptive names for Knowledge Bases, AI Models, and Jobs.
@@ -978,7 +979,7 @@ Refer to your shell's documentation for robust quoting mechanisms if you encount
 6.  **Environment Configuration**: Ensure `.env` (or `config/config.py`) is correctly set up with API keys and connection details for MindsDB, Ollama, and any other services.
 7.  **Review Logs**: If commands fail or behave unexpectedly, check the MindsDB server logs and the Kleos console output for error messages.
 
-### Troubleshooting Common Issues
+## Troubleshooting Common Issues
 1.  **JSON Parsing Errors**:
     *   Usually due to incorrect quoting/escaping for your shell. See the "JSON Parameter Handling" section above.
     *   Error messages like "Expecting value: line 1 column 1" often indicate a malformed or empty JSON string due to shell interpretation.
@@ -998,7 +999,7 @@ Refer to your shell's documentation for robust quoting mechanisms if you encount
     *   For Ollama models, ensure they have been pulled into your Ollama instance (e.g., `ollama pull nomic-embed-text`).
     *   Consult MindsDB server logs for more detailed error messages from the ML engines.
 
-### Getting Help
+## Getting Help
 *   Use the `--help` option with any command or subcommand (e.g., `kleos --help`, `kleos kb --help`, `kleos kb create --help`) to see available options and descriptions.
 *   Refer to this `Command-references.md` document.
 *   Check the main `README.md` for setup, installation, and configuration details.

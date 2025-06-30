@@ -3,3 +3,4 @@ click
 python-dotenv
 ollama
 google-generativeai
+rich
