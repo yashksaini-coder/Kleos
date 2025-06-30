@@ -1,6 +1,7 @@
 # MindsDB CLI & Knowledge Base Toolkit
 
-![image](https://github.com/user-attachments/assets/cc9acd6d-db6b-4d1f-b0f0-9c82d25e1de8)
+![Kleos Banner](https://github.com/user-attachments/assets/b7e58e6d-005a-4bd9-ae70-b9d8dae2a787)
+
 
 [![MindsDB](https://img.shields.io/badge/Powered%20by-MindsDB-blue)](https://mindsdb.com)
 
