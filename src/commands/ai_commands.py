@@ -1,277 +1,413 @@
 import click
+import pandas as pd
+from rich.table import Table
+from rich.status import Status
+from rich.syntax import Syntax
+from rich.text import Text
 from config import config as app_config # To get GOOGLE_GEMINI_API_KEY
+from .utils import get_handler_and_console, CONTEXT_SETTINGS, RichHelpFormatter # Import RichHelpFormatter
 
-@click.group('ai')
+@click.group('ai', context_settings=CONTEXT_SETTINGS)
 def ai_group():
-    """Commands for managing and querying AI Models (trained on data)."""
+    """Commands for managing AI Models, often called 'Generative AI Tables' in MindsDB.
+
+    These models are created from your data using a `CREATE MODEL ... FROM (SELECT ...)`
+    SQL statement. They can be used for various tasks such as text classification,
+    summarization, translation, or other generative AI tasks, depending on the
+    chosen engine and prompt template.
+    """
     pass
 
-@ai_group.command('create-model') # Reverted from create-table
-@click.argument('model_name') # Reverted from table_name
-@click.option('--project-name', default=None, help="MindsDB project name. Defaults to the connected project.")
-@click.option('--select-data-query', required=True, help="SQL SELECT query to fetch training data. E.g., 'SELECT text, category FROM my_integration.training_data'")
-@click.option('--predict-column', required=True, help="Name of the column the AI Model should predict/generate.")
-@click.option('--engine', default='openai', show_default=True, help="AI engine to use (e.g., 'openai', 'google_gemini', 'anthropic').")
-@click.option('--prompt-template', default=None, help="Prompt template for the AI Model. E.g., 'Summarize this: {{text_column}}'")
-@click.option('--param', 'additional_params', multiple=True, type=(str, str), help="Additional USING parameters as key-value pairs. E.g., --param model_name gpt-3.5-turbo --param api_key YOUR_KEY")
+ai_group.formatter_class = RichHelpFormatter # Set formatter for this group
+
+@ai_group.command('create-model')
+@click.argument('model_name')
+@click.option('--project-name', default=None, help="MindsDB project where the model will be created. Defaults to the currently connected project.")
+@click.option('--select-data-query', required=True, help="SQL SELECT query to fetch training data. Must be a complete query. E.g., 'SELECT text_column, label_column FROM my_datasource.my_table'.")
+@click.option('--predict-column', required=True, help="Name of the column the AI Model should learn to predict or generate.")
+@click.option('--engine', default='openai', show_default=True, help="AI engine to use (e.g., 'openai', 'google_gemini', 'anthropic', 'ollama'). Check MindsDB docs for available engines.")
+@click.option('--prompt-template', default=None, help="Prompt template for the AI Model. Use {{column_name}} for placeholders from your --select-data-query. E.g., 'Summarize: {{text_column}}'.")
+@click.option('--param', 'additional_params', multiple=True, type=(str, str), help="Additional `USING` parameters as key-value pairs. Can be specified multiple times. E.g., --param model_name gpt-3.5-turbo --param api_key YOUR_API_KEY.")
 @click.pass_context
-def ai_create_model(ctx, model_name, project_name, select_data_query, predict_column, engine, prompt_template, additional_params): # Reverted function name
+def ai_create_model(ctx, model_name, project_name, select_data_query, predict_column, engine, prompt_template, additional_params):
     """
-    Creates an AI Model that learns from input data specified by a SELECT query.
-    The MODEL_NAME will be created in the specified --project-name or the default project.
-    --select-data-query specifies the source of training data.
-    --predict-column is the target variable the AI Model will learn to predict/generate.
-    --engine specifies the underlying LLM engine.
-    --prompt-template can be used to guide the AI Model's generation process.
-    Additional engine-specific parameters can be passed using multiple --param options.
-    Example:
-    mdcli ai create-model my_summarizer_model --select-data-query "SELECT title, text FROM hackernews.stories WHERE score > 10" \\
-    --predict-column summary --engine openai --prompt-template "Generate a concise summary for the following text: {{text}}. The title is {{title}}." \\
-    --param api_key YOUR_OPENAI_KEY
+    Creates an AI Model (Generative AI Table) by training it on data from a SELECT query.
+
+    This command constructs a `CREATE MODEL ... FROM (SELECT ...) PREDICT ... USING ...` SQL statement.
+    The MODEL_NAME will be created in the specified --project-name or the default connected project.
+
+    --select-data-query: Provides the training data. Ensure columns referenced in the
+                         prompt template are selected in this query.
+    --predict-column: The target variable the AI Model will learn to generate.
+    --engine: Specifies the underlying LLM or ML engine.
+    --prompt-template: Guides the model's generation process. Use {{column_name}} for features.
+    --param: Allows passing engine-specific parameters like API keys, model variants (e.g., 'gpt-4'), temperature, etc.
+
+    Examples:
+
+      Create a text summarizer using OpenAI:
+      `kleos ai create-model news_summarizer --select-data-query "SELECT article_text FROM news_data.articles" --predict-column summary --engine openai --prompt-template "Summarize this article: {{article_text}}" --param api_key YOUR_OPENAI_KEY --param model_name gpt-3.5-turbo`
+
+      Create a sentiment classifier using Google Gemini:
+      `kleos ai create-model review_sentiment --select-data-query "SELECT review, sentiment FROM my_reviews.data" --predict-column sentiment --engine google_gemini --prompt-template "Classify sentiment: {{review}}" --param api_key YOUR_GOOGLE_KEY`
     """
-    handler = ctx.obj
-    if not handler or not handler.project:
-        click.echo(click.style("MindsDB connection not available.", fg='red'))
-        return
+    handler, console = get_handler_and_console(ctx)
+    if not handler: return
 
     effective_project_name = project_name if project_name else handler.project.name
     if not effective_project_name:
-        click.echo(click.style("Could not determine MindsDB project. Please connect or specify --project-name.", fg='red'))
+        console.print("[red]:x: Could not determine MindsDB project. Please connect or specify --project-name.[/red]")
         return
 
     using_params = {'engine': engine}
-    if prompt_template:
-        using_params['prompt_template'] = prompt_template
-
+    if prompt_template: using_params['prompt_template'] = prompt_template
     if engine == 'google_gemini' and 'api_key' not in dict(additional_params):
         gemini_api_key = app_config.GOOGLE_GEMINI_API_KEY
-        if gemini_api_key:
-            using_params['api_key'] = gemini_api_key
-        else:
-            click.echo(click.style(f"Warning: Engine is '{engine}' but GOOGLE_GEMINI_API_KEY not found in app config and not provided via --param api_key.", fg='yellow'))
-
-    for key, value in additional_params:
-        using_params[key] = value
-
+        if gemini_api_key: using_params['api_key'] = gemini_api_key
+        else: console.print(f"[yellow]Warning: Engine is '{engine}' but GOOGLE_GEMINI_API_KEY not found in config and not provided via --param api_key.[/yellow]")
+    for key, value in additional_params: using_params[key] = value
     if engine in ['openai', 'anthropic', 'google_gemini'] and 'api_key' not in using_params:
-         click.echo(click.style(f"Warning: Engine '{engine}' typically requires an 'api_key' in USING clause. Please provide it via --param api_key YOUR_KEY or ensure it's in app config for supported engines.", fg='yellow'))
+         console.print(f"[yellow]Warning: Engine '{engine}' typically requires an 'api_key'. Provide via --param api_key or ensure in config.[/yellow]")
 
-    click.echo(f"Creating AI Model '{model_name}' in project '{effective_project_name}'...")
-    click.echo(f"  Training data query: {select_data_query}")
-    click.echo(f"  Predicting column: {predict_column}")
-    click.echo(f"  Using parameters: {using_params}")
+    console.print(f"Creating AI Model '[cyan]{model_name}[/cyan]' in project '[cyan]{effective_project_name}[/cyan]'...")
+    console.print(Text.assemble(("  Training data query: ", "dim"), (select_data_query, "italic")))
+    console.print(Text.assemble(("  Predicting column: ", "dim"), (predict_column, "italic")))
+    console.print(Text.assemble(("  Using parameters: ", "dim"), (str(using_params), "italic")))
 
-    if handler.create_model_from_query( # Updated to call renamed handler method
-        model_name=model_name,
-        project_name=effective_project_name,
-        select_data_query=select_data_query,
-        predict_column=predict_column,
-        using_params=using_params
-    ):
-        click.echo(click.style(f"AI Model '{model_name}' creation process initiated or model already exists.", fg='green'))
-        click.echo(f"Training/generation may take some time. Use 'ai list-models --project-name {effective_project_name}' and 'ai describe-model {model_name} --project-name {effective_project_name}' to check status.")
+    with Status(f"Initiating AI Model '[cyan]{model_name}[/cyan]' creation...", console=console, spinner="dots"):
+        success = handler.create_model_from_query(
+            model_name=model_name, project_name=effective_project_name,
+            select_data_query=select_data_query, predict_column=predict_column, using_params=using_params
+        )
+    if success:
+        console.print(f"[green]:heavy_check_mark: AI Model '[cyan]{model_name}[/cyan]' creation process initiated or model already exists.[/green]")
+        console.print(f"[dim]Training/generation may take time. Use 'kleos ai list-models --project-name {effective_project_name}' and 'kleos ai describe-model {model_name} --project-name {effective_project_name}' to check status.[/dim]")
     else:
-        click.echo(click.style(f"Failed to initiate creation for AI Model '{model_name}'.", fg='red'))
+        console.print(f"[red]:x: Failed to initiate creation for AI Model '[cyan]{model_name}[/cyan]'.[/red]")
 
-@ai_group.command('list-models') # Reverted from list-tables
-@click.option('--project-name', default=None, help="MindsDB project name. Defaults to the connected project.")
+@ai_group.command('list-models')
+@click.option('--project-name', default=None, help="MindsDB project from which to list models. Defaults to the currently connected project.")
 @click.pass_context
-def ai_list_models(ctx, project_name): # Reverted from ai_list_tables
-    """Lists all AI Models in the specified project (or default project)."""
-    handler = ctx.obj
-    if not handler or (not handler.project and not project_name):
-        click.echo(click.style("MindsDB connection not available or project not specified.", fg='red'))
-        return
+def ai_list_models(ctx, project_name):
+    """
+    Lists all AI Models within a specified MindsDB project.
+
+    Displays key information: NAME, ENGINE, PROJECT, ACTIVE, STATUS, PREDICT,
+    UPDATE_STATUS, and TRAINING_OPTIONS.
+    The table will use the full console width.
+    """
+    handler, console = get_handler_and_console(ctx)
+    if not handler: return
 
     effective_project_name = project_name if project_name else handler.project.name
     if not effective_project_name:
-        click.echo(click.style("Could not determine MindsDB project. Please connect or specify --project-name.", fg='red'))
+        console.print("[red]:x: Could not determine MindsDB project. Please connect or specify --project-name.[/red]")
         return
 
-    click.echo(f"Listing AI Models in project '{effective_project_name}'...")
-    models_df = handler.list_models(project_name=effective_project_name)
+    with Status(f"Fetching AI Models from project '[cyan]{effective_project_name}[/cyan]'...", console=console):
+        # Assuming handler.list_models() returns a DataFrame with columns like:
+        # 'name', 'engine', 'project_name', 'active', 'status', 'predict' (target column),
+        # 'update_status', 'training_options_json' (or similar for training_options)
+        models_df = handler.list_models(project_name=effective_project_name)
 
     if models_df is not None and not models_df.empty:
-        display_columns = ['name', 'status', 'engine', 'version', 'active', 'predict']
-        available_display_columns = [col for col in display_columns if col in models_df.columns]
+        console.print(f"\n[bold green]AI Models in Project '[cyan]{effective_project_name}[/cyan]':[/bold green]")
 
-        if not available_display_columns:
-             click.echo(models_df.to_string(index=False))
-        else:
-             click.echo(models_df[available_display_columns].to_string(index=False))
-    elif models_df is not None:
-        click.echo(click.style(f"No AI Models found in project '{effective_project_name}'.", fg='yellow'))
-    else:
-        click.echo(click.style(f"Failed to list AI Models from project '{effective_project_name}'.", fg='red'))
+        # Define the exact columns to display and their user-friendly headers.
+        # The keys are the expected column names from models_df (adjust if handler.list_models() returns different names).
+        # The values are the headers to display in the table.
+        # Example: 'name' from df becomes 'NAME' in table.
+        # These are based on the user request: NAME, ENGINE, PROJECT, ACTIVE, STATUS, PREDICT, UPDATE_STATUS, TRAINING_OPTIONS
+        # Assuming MindsDB `SHOW MODELS` output columns are lowercase with underscores.
+        display_columns_map = {
+            'NAME': 'NAME',
+            'ENGINE': 'ENGINE',
+            'PROJECT': 'PROJECT',
+            'ACTIVE': 'ACTIVE',
+            'STATUS': 'STATUS',
+            'PREDICT': 'PREDICT',
+            'STATUS': 'STATUS',
+            'TRAINING_OPTIONS': 'TRAINING_OPTIONS'
+        }
 
-@ai_group.command('describe-model') # Reverted from describe-table
-@click.argument('model_name') # Reverted from table_name
-@click.option('--project-name', default=None, help="MindsDB project name. Defaults to the connected project.")
+        # Create table. `expand=True` helps in utilizing full width when possible.
+        # `box=box.ROUNDED` for a nicer look.
+        table = Table(show_header=True, header_style="bold magenta", show_lines=True,
+                      title=f"AI Models in Project '[cyan]{effective_project_name}[/cyan]'",
+                      expand=True)
+
+        actual_df_columns_to_render = []
+
+        for df_col, display_header in display_columns_map.items():
+            if df_col in models_df.columns:
+                col_options = {}
+                if df_col == 'training_options': # Keep training_options potentially truncated as it can be very long
+                    col_options['max_width'] = 50
+                    col_options['overflow'] = 'ellipsis'
+
+                # For other columns, let Rich manage width by not setting max_width, allowing them to expand.
+                # Rich's `expand=True` on Table and no width on Column helps.
+                table.add_column(display_header, **col_options)
+                actual_df_columns_to_render.append(df_col)
+            else:
+                # If a specifically requested column is missing in the DataFrame,
+                # we could add it with a note or skip. For now, skipping.
+                console.print(f"[yellow]Note: Column '{df_col}' (for '{display_header}') not found in model data. It will not be displayed.[/yellow]")
+
+        if not actual_df_columns_to_render:
+            console.print("[red]Error: None of the requested columns were found in the model data. Cannot display table.[/red]")
+            # Fallback to showing all available columns if none of the desired ones are present.
+            if not models_df.empty:
+                console.print("[yellow]Displaying all available columns instead:[/yellow]")
+                for df_col_name in models_df.columns:
+                    table.add_column(df_col_name.replace('_', ' ').title(), max_width=30, overflow="ellipsis") # Basic fallback
+                    actual_df_columns_to_render.append(df_col_name)
+            else: # models_df is empty
+                console.print(f"[yellow]No AI Models found in project '[cyan]{effective_project_name}[/cyan]'.[/yellow]")
+                return
+
+
+        # Only proceed to add rows if there are columns to render
+        if actual_df_columns_to_render:
+            for _, row in models_df.iterrows():
+                row_data = []
+                for df_col_name in actual_df_columns_to_render:
+                    cell_value = row.get(df_col_name)
+                    # Ensure training_options (or any complex object) is nicely stringified for the table
+                    if df_col_name == 'training_options' and not isinstance(cell_value, str):
+                        cell_value = str(cell_value)
+                    else:
+                        cell_value = str(cell_value) if cell_value is not None else ""
+                    row_data.append(cell_value)
+                table.add_row(*row_data)
+
+            if table.columns:
+                console.print(table)
+            else:
+                 console.print(f"[red]Error: Could not prepare table for display even though model data exists for project '{effective_project_name}'.[/red]")
+        # If actual_columns_to_render was empty and models_df was also empty, it's handled above.
+
+    elif models_df is not None: # models_df is empty
+        console.print(f"[yellow]No AI Models found in project '[cyan]{effective_project_name}[/cyan]'.[/yellow]")
+    else: # models_df is None (error fetching)
+        console.print(f"[red]:x: Failed to list AI Models from project '[cyan]{effective_project_name}[/cyan]'.[/red]")
+
+@ai_group.command('describe-model')
+@click.argument('model_name')
+@click.option('--project-name', default=None, help="MindsDB project where the model resides. Defaults to the currently connected project.")
 @click.pass_context
-def ai_describe_model(ctx, model_name, project_name): # Reverted from ai_describe_table
-    """Describes an AI Model, showing its details, schema, and status."""
-    handler = ctx.obj
-    if not handler or (not handler.project and not project_name):
-        click.echo(click.style("MindsDB connection not available or project not specified.", fg='red'))
-        return
-
-    effective_project_name = project_name if project_name else handler.project.name
-    if not effective_project_name:
-        click.echo(click.style("Could not determine MindsDB project. Please connect or specify --project-name.", fg='red'))
-        return
-
-    click.echo(f"Describing AI Model '{model_name}' in project '{effective_project_name}'...")
-    description_df = handler.describe_model(model_name=model_name, project_name=effective_project_name)
-
-    if description_df is not None and not description_df.empty:
-        click.echo(click.style(f"Details for AI Model '{model_name}':", fg='green'))
-        if 'column' in description_df.columns and 'value' in description_df.columns:
-            for _, row in description_df.iterrows():
-                click.echo(f"  {row['column']}: {row['value']}")
-        elif 'Type' in description_df.columns and 'Value' in description_df.columns:
-             for _, row in description_df.iterrows():
-                click.echo(f"  {row['Type']}: {row['Value']}")
-        else:
-            click.echo(description_df.to_string(index=False))
-
-        status_row = description_df[description_df.apply(lambda row: str(row.iloc[0]).upper() == 'STATUS', axis=1)]
-        if not status_row.empty:
-            status_value = status_row.iloc[0,1]
-            click.echo(click.style(f"AI Model Status: {status_value}", fg='blue'))
-            if status_value.lower() == 'error':
-                error_row = description_df[description_df.apply(lambda row: str(row.iloc[0]).upper() == 'ERROR', axis=1)]
-                if not error_row.empty:
-                     click.echo(click.style(f"Error Details: {error_row.iloc[0,1]}", fg='red'))
-    elif description_df is not None:
-        click.echo(click.style(f"No description found for AI Model '{model_name}' in project '{effective_project_name}'. It might not exist or is still processing.", fg='yellow'))
-    else:
-        click.echo(click.style(f"Failed to describe AI Model '{model_name}' from project '{effective_project_name}'.", fg='red'))
-
-@ai_group.command('drop-model') # Reverted from drop-table
-@click.argument('model_name') # Reverted from table_name
-@click.option('--project-name', default=None, help="MindsDB project name. Defaults to the connected project.")
-@click.confirmation_option(prompt='Are you sure you want to drop this AI Model? This action cannot be undone.')
-@click.pass_context
-def ai_drop_model(ctx, model_name, project_name): # Reverted from ai_drop_table
-    """Drops (deletes) an AI Model from the specified project."""
-    handler = ctx.obj
-    if not handler or (not handler.project and not project_name):
-        click.echo(click.style("MindsDB connection not available or project not specified.", fg='red'))
-        return
-
-    effective_project_name = project_name if project_name else handler.project.name
-    if not effective_project_name:
-        click.echo(click.style("Could not determine MindsDB project. Please connect or specify --project-name.", fg='red'))
-        return
-
-    click.echo(f"Attempting to drop AI Model '{model_name}' from project '{effective_project_name}'...")
-    if handler.drop_model(model_name=model_name, project_name=effective_project_name):
-        click.echo(click.style(f"AI Model '{model_name}' (or '{effective_project_name}.{model_name}') dropped successfully or did not exist.", fg='green'))
-    else:
-        click.echo(click.style(f"Failed to drop AI Model '{model_name}' from project '{effective_project_name}'.", fg='red'))
-
-@ai_group.command('refresh-model') # Reverted from refresh-table
-@click.argument('model_name') # Reverted from table_name
-@click.option('--project-name', default=None, help="MindsDB project name. Defaults to the connected project.")
-@click.pass_context
-def ai_refresh_model(ctx, model_name, project_name): # Reverted from ai_refresh_table
+def ai_describe_model(ctx, model_name, project_name):
     """
-    Refreshes an AI Model, typically by retraining it with the latest data
-    from its original data source.
+    Shows detailed information for a specific AI Model in a table format.
+
+    Displays: NAME, ENGINE, PROJECT, ACTIVE, STATUS, PREDICT, UPDATE_STATUS,
+    and TRAINING_OPTIONS. The table uses the full console width.
     """
-    handler = ctx.obj
-    if not handler or (not handler.project and not project_name):
-        click.echo(click.style("MindsDB connection not available or project not specified.", fg='red'))
-        return
+    handler, console = get_handler_and_console(ctx)
+    if not handler: return
 
     effective_project_name = project_name if project_name else handler.project.name
     if not effective_project_name:
-        click.echo(click.style("Could not determine MindsDB project. Please connect or specify --project-name.", fg='red'))
+        console.print("[red]:x: Could not determine MindsDB project. Please connect or specify --project-name.[/red]")
         return
 
-    click.echo(f"Attempting to refresh AI Model '{model_name}' in project '{effective_project_name}'...")
-    if handler.refresh_model(model_name=model_name, project_name=effective_project_name):
-        click.echo(click.style(f"AI Model '{model_name}' (or '{effective_project_name}.{model_name}') refresh process initiated successfully.", fg='green'))
-        click.echo(f"Retraining may take some time. Use 'ai describe-model {model_name} --project-name {effective_project_name}' to check status.")
+    with Status(f"Fetching details for AI Model '[cyan]{model_name}[/cyan]' in project '[cyan]{effective_project_name}[/cyan]'...", console=console):
+        # We expect handler.describe_model to return a DataFrame for the single model,
+        # containing the necessary columns, similar to a filtered `list_models` result.
+        # If handler.describe_model returns the old format (key-value pairs), this will need adjustment
+        # in the handler itself, or here by fetching all models and filtering.
+        # For now, proceeding with the assumption it returns a one-row DataFrame with relevant columns.
+        model_df = handler.describe_model(model_name=model_name, project_name=effective_project_name)
+
+    if model_df is not None and not model_df.empty:
+        # Ensure we're dealing with a single model's data, possibly by taking the first row
+        # if describe_model by chance returns more (e.g. if it internally used list_models without exact name filter)
+        if len(model_df) > 1:
+            # If more than one model is returned by describe_model for a specific name, it's unexpected.
+            # We'll take the first one that matches the name, or just the first one.
+            # A more robust handler.describe_model should ensure only one model's data is returned.
+            console.print(f"[yellow]Warning: describe-model returned multiple entries for '{model_name}'. Displaying the first one.[/yellow]")
+            # Attempt to find an exact name match if multiple rows are returned
+            exact_match_df = model_df[model_df['name'].str.lower() == model_name.lower()]
+            if not exact_match_df.empty:
+                model_df = exact_match_df.head(1)
+            else:
+                model_df = model_df.head(1) # Fallback to first row if no exact name match (e.g. due to case)
+
+        console.print(f"\n[bold green]Details for AI Model '[cyan]{effective_project_name}.{model_name}[/cyan]':[/bold green]")
+
+        display_columns_map = {
+            'NAME': 'NAME',
+            'ENGINE': 'ENGINE',
+            'PROJECT': 'PROJECT',
+            'ACTIVE': 'ACTIVE',
+            'STATUS': 'STATUS',
+            'PREDICT': 'PREDICT',
+            'STATUS': 'STATUS',
+            'TRAINING_OPTIONS': 'TRAINING_OPTIONS'
+        }
+
+        table = Table(show_header=True, header_style="bold magenta", show_lines=True,
+                      title=f"Details for AI Model '[cyan]{effective_project_name}.{model_name}[/cyan]'",
+                      expand=True)
+
+        actual_df_columns_to_render = []
+        for df_col, display_header in display_columns_map.items():
+            if df_col in model_df.columns:
+                col_options = {}
+                if df_col == 'training_options':
+                    col_options['max_width'] = 50
+                    col_options['overflow'] = 'ellipsis'
+                table.add_column(display_header, **col_options)
+                actual_df_columns_to_render.append(df_col)
+            else:
+                console.print(f"[yellow]Note: Detail '{df_col}' (for '{display_header}') not found for this model. It will not be displayed.[/yellow]")
+
+        if not actual_df_columns_to_render:
+            console.print(f"[red]Error: None of the requested details were found for model '{model_name}'.[/red]")
+            # Fallback to showing all available columns from the first row if any.
+            if not model_df.empty:
+                console.print("[yellow]Displaying all available raw details instead (key-value format):[/yellow]")
+                # Revert to a simple key-value display if the structured table fails
+                kv_table = Table(show_header=False, box=None)
+                kv_table.add_column("Property", style="dim")
+                kv_table.add_column("Value")
+                first_row = model_df.iloc[0]
+                for col_name, value in first_row.items():
+                    kv_table.add_row(str(col_name), str(value))
+                console.print(kv_table)
+            return
+
+        # Add the single row of model data
+        if actual_df_columns_to_render and not model_df.empty:
+            # model_df should contain one row after the logic above
+            row_data_series = model_df.iloc[0]
+            row_values = []
+            for df_col_name in actual_df_columns_to_render:
+                cell_value = row_data_series.get(df_col_name)
+                if df_col_name == 'training_options' and not isinstance(cell_value, str):
+                    cell_value = str(cell_value)
+                else:
+                    cell_value = str(cell_value) if cell_value is not None else ""
+                row_values.append(cell_value)
+            table.add_row(*row_values)
+
+            if table.columns:
+                console.print(table)
+            else: # Should be rare
+                 console.print(f"[red]Error: Could not prepare table for display for model '{model_name}'.[/red]")
+        elif model_df.empty : # Handles case where model_df became empty after filtering
+             console.print(f"[yellow]No data found for AI Model '[cyan]{model_name}[/cyan]' in project '[cyan]{effective_project_name}[/cyan]' after filtering.[/yellow]")
+
+    elif model_df is not None: # model_df is empty initially
+        console.print(f"[yellow]No description found for AI Model '[cyan]{model_name}[/cyan]' in project '[cyan]{effective_project_name}[/cyan]'. It might not exist.[/yellow]")
+    else: # model_df is None (error fetching)
+        console.print(f"[red]:x: Failed to describe AI Model '[cyan]{model_name}[/cyan]' from project '[cyan]{effective_project_name}[/cyan]'. Check connection and model name.[/red]")
+
+@ai_group.command('drop-model')
+@click.argument('model_name')
+@click.option('--project-name', default=None, help="MindsDB project where the model resides. Defaults to the currently connected project.")
+@click.confirmation_option(prompt='Are you sure you want to drop this AI Model? This action is irreversible.')
+@click.pass_context
+def ai_drop_model(ctx, model_name, project_name):
+    """
+    Drops (deletes) a specified AI Model from a MindsDB project.
+
+    This action is irreversible and will remove the model and its associated training artifacts.
+    You will be prompted for confirmation before deletion.
+    """
+    handler, console = get_handler_and_console(ctx)
+    if not handler: return
+
+    effective_project_name = project_name if project_name else handler.project.name
+    if not effective_project_name:
+        console.print("[red]:x: Could not determine MindsDB project. Please connect or specify --project-name.[/red]")
+        return
+
+    with Status(f"Attempting to drop AI Model '[cyan]{model_name}[/cyan]' from project '[cyan]{effective_project_name}[/cyan]'...", console=console):
+        success = handler.drop_model(model_name=model_name, project_name=effective_project_name)
+
+    if success:
+        console.print(f"[green]:heavy_check_mark: AI Model '[cyan]{effective_project_name}.{model_name}[/cyan]' dropped successfully or did not exist.[/green]")
     else:
-        click.echo(click.style(f"Failed to initiate refresh for AI Model '{model_name}' from project '{effective_project_name}'.", fg='red'))
+        console.print(f"[red]:x: Failed to drop AI Model '[cyan]{effective_project_name}.{model_name}[/cyan]'.[/red]")
 
-# @ai_group.command('retrain-model') # Reverted from retrain-table
-# @click.argument('model_name') # Reverted from table_name
-# @click.option('--project-name', default=None, help="MindsDB project name. Defaults to the connected project.")
-# @click.option('--select-data-query', default=None, help="Optional new SQL SELECT query to fetch training data. If not provided, AI model retrains with original query/data source.")
-# @click.option('--param', 'additional_params', multiple=True, type=(str, str), help="Optional new USING parameters as key-value pairs for retraining.")
-# @click.pass_context
-# def ai_retrain_model(ctx, model_name, project_name, select_data_query, additional_params): # Reverted from ai_retrain_table
-#     """
-#     Retrains an AI Model, optionally with a new data query or new USING parameters.
-#     If --select-data-query is omitted, it behaves like 'refresh-model'.
-#     """
-#     handler = ctx.obj
-#     if not handler or (not handler.project and not project_name):
-#         click.echo(click.style("MindsDB connection not available or project not specified.", fg='red'))
-#         return
+@ai_group.command('refresh-model')
+@click.argument('model_name')
+@click.option('--project-name', default=None, help="MindsDB project where the model resides. Defaults to the currently connected project.")
+@click.pass_context
+def ai_refresh_model(ctx, model_name, project_name):
+    """
+    Refreshes an existing AI Model.
 
-#     effective_project_name = project_name if project_name else handler.project.name
-#     if not effective_project_name:
-#         click.echo(click.style("Could not determine MindsDB project. Please connect or specify --project-name.", fg='red'))
-#         return
+    This typically involves retraining the model with the latest data from its
+    original data source, using its original training parameters (`RETRAIN model_name;`).
+    The model status will change to 'training' or 'generating' during this process.
+    """
+    handler, console = get_handler_and_console(ctx)
+    if not handler: return
 
-#     using_params = {}
-#     if additional_params:
-#         for key, value in additional_params:
-#             using_params[key] = value
+    effective_project_name = project_name if project_name else handler.project.name
+    if not effective_project_name:
+        console.print("[red]:x: Could not determine MindsDB project. Please connect or specify --project-name.[/red]")
+        return
 
-#     click.echo(f"Attempting to retrain AI Model '{model_name}' in project '{effective_project_name}'...")
-#     if select_data_query:
-#         click.echo(f"  Using new training data query: {select_data_query}")
-#     if using_params:
-#         click.echo(f"  Using new parameters: {using_params}")
+    with Status(f"Attempting to refresh AI Model '[cyan]{model_name}[/cyan]' in project '[cyan]{effective_project_name}[/cyan]'...", console=console):
+        success = handler.refresh_model(model_name=model_name, project_name=effective_project_name)
 
-#     if handler.retrain_model_custom(
-#         model_name=model_name,
-#         project_name=effective_project_name,
-#         select_data_query=select_data_query,
-#         using_params=using_params if using_params else None
-#     ):
-#         click.echo(click.style(f"AI Model '{model_name}' (or '{effective_project_name}.{model_name}') retrain process initiated successfully.", fg='green'))
-#         click.echo(f"Retraining may take some time. Use 'ai describe-model {model_name} --project-name {effective_project_name}' to check status.")
-#     else:
-#         click.echo(click.style(f"Failed to initiate retrain for AI Model '{model_name}' from project '{effective_project_name}'.", fg='red'))
+    if success:
+        console.print(f"[green]:heavy_check_mark: AI Model '[cyan]{effective_project_name}.{model_name}[/cyan]' refresh process initiated successfully.[/green]")
+        console.print(f"[dim]Retraining may take time. Use 'kleos ai describe-model {model_name} --project-name {effective_project_name}' to check status.[/dim]")
+    else:
+        console.print(f"[red]:x: Failed to initiate refresh for AI Model '[cyan]{effective_project_name}.{model_name}[/cyan]'.[/red]")
 
 @ai_group.command('query')
-@click.argument('query_string', type=str)
-@click.option('--project-name', default=None, help="MindsDB project name to run the query against. Defaults to the connected project.")
+@click.argument('query_string', type=str) # Removed help, will be in docstring
+@click.option('--project-name', default=None, help="MindsDB project context for the query. Defaults to the currently connected project.")
 @click.pass_context
 def ai_query(ctx, query_string, project_name):
     """
-    Executes a SQL query against the MindsDB project, typically to query an AI Model.
-    The MODEL_NAME should be referenced appropriately within your QUERY_STRING.
+    Executes an arbitrary SQL query against the MindsDB project.
+
+    This is commonly used to query AI Models by joining them with data tables
+    or selecting from them with a `WHERE` clause that provides input to the model.
+    Ensure your query string correctly references table and model names, including
+    project and datasource prefixes if necessary (e.g., `mindsdb.my_model`, `my_datasource.input_data`).
 
     Example for an AI Model 'my_summarizer_model':
-    mdcli ai query "SELECT hn.title, hn.text, ai.summary FROM hackernews.hnstories AS hn JOIN my_summarizer_model AS ai WHERE hn.title IS NOT NULL LIMIT 3"
+    `kleos ai query "SELECT t.text_content, m.summary FROM news.articles AS t JOIN mindsdb.my_summarizer_model AS m WHERE t.id = 123"`
+
+    Directly querying a model that takes input via WHERE clause:
+    `kleos ai query "SELECT * FROM mindsdb.my_translator_model WHERE text_to_translate = 'Hello world' AND target_language = 'Spanish'"`
     """
-    handler = ctx.obj
-    if not handler or (not handler.project and not project_name):
-        click.echo(click.style("MindsDB connection not available or project not specified.", fg='red'))
-        return
+    handler, console = get_handler_and_console(ctx)
+    if not handler: return
+
+    effective_project_name = project_name if project_name else handler.project.name if handler.project else "default"
 
     if project_name and handler.project and project_name != handler.project.name:
-        click.echo(click.style(f"Warning: Query will be executed in the context of the currently connected project ('{handler.project.name}'). "
-                               f"Ensure your query string correctly references objects if they are in '{project_name}'.", fg='yellow'))
-    elif not handler.project and project_name:
-         click.echo(click.style(f"Warning: No active connection to a default project. Ensure your query string fully qualifies table and model names with their respective projects if needed.", fg='yellow'))
+        console.print(f"[yellow]Warning: Query will be executed in the context of the connected project ('{handler.project.name}'). "
+                      f"Ensure your query string correctly references objects if they are in '{project_name}'.[/yellow]")
 
-    click.echo(f"Executing query: {query_string}")
-    try:
-        result_df = handler.execute_sql(query_string)
-        if result_df is not None:
-            if not result_df.empty:
-                click.echo(click.style("Query Result:", fg='green'))
-                click.echo(result_df.to_string(index=False))
-            else:
-                click.echo(click.style("Query executed successfully but returned no data.", fg='yellow'))
+    console.print(f"Executing query in project '[cyan]{effective_project_name}[/cyan]':")
+    console.print(Syntax(query_string, "sql", theme="dracula", line_numbers=True))
+
+    with Status("Executing query...", console=console, spinner="aesthetic"):
+        try:
+            result_df = handler.execute_sql(query_string)
+        except Exception as e:
+            console.print(f"[red]:x: Error executing query: {str(e)}[/red]")
+            return
+
+    if result_df is not None:
+        if not result_df.empty:
+            console.print("\n[bold green]Query Result:[/bold green]")
+            table = Table(show_header=True, header_style="bold magenta", show_lines=True)
+            for col in result_df.columns: table.add_column(col)
+            for _, row in result_df.iterrows():
+                table.add_row(*(str(x) for x in row))
+            console.print(table)
         else:
-            click.echo(click.style("Query execution failed to return results.", fg='red'))
-    except Exception as e:
-        click.echo(click.style(f"Error executing query: {str(e)}", fg='red'))
+            console.print("[yellow]Query executed successfully but returned no data.[/yellow]")
+    else: # Should not happen if execute_sql raises on failure, but as a safeguard
+        console.print("[red]:x: Query execution failed to return results.[/red]")
