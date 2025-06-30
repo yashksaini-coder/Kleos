@@ -1,0 +1,34 @@
+# Use Python 3.8 slim version as a base image, matching pyproject.toml
+FROM python:3.8-slim-bullseye
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the project structure
+# Copy pyproject.toml first to leverage Docker layer caching for dependencies
+COPY pyproject.toml /app/
+
+# Copy main.py, the src directory, and the config directory
+COPY main.py /app/
+COPY src/ /app/src/
+COPY config/ /app/config/
+# Note: If there are other essential root files/dirs, copy them as well.
+
+# Install dependencies
+# Using pip to install from pyproject.toml. This will also install Kleos itself.
+# Ensure build tools are present if any C extensions are compiled (slim images might need them)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libc-dev libffi-dev && \
+    pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir . && \
+    apt-get purge -y --auto-remove gcc libc-dev libffi-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# The `kleos` command is now available in the PATH due to `pip install .`
+# Default command to run when the container starts (e.g., show help)
+ENTRYPOINT ["kleos"]
+CMD ["--help"]
