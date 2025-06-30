@@ -5,7 +5,14 @@ from rich.table import Table
 from rich.status import Status
 from rich.syntax import Syntax
 from rich.text import Text
-from config import config as app_config # Used for default OLLAMA_BASE_URL in kb create
+try:
+    from config import config as app_config
+except ImportError:
+    # When installed as package, config might be at different location
+    import sys
+    import os
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+    from config import config as app_config
 from .utils import get_handler_and_console, CONTEXT_SETTINGS # Import from local utils
 
 @click.group('kb', context_settings=CONTEXT_SETTINGS)

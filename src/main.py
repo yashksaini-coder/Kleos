@@ -8,14 +8,14 @@ import os
 from rich.table import Table as RichTable # Alias to avoid conflict
 from rich.padding import Padding
 
-from src.core.mindsdb_handler import MindsDBHandler
+from .core.mindsdb_handler import MindsDBHandler
 # from config import config # Config is used by MindsDBHandler, not directly here
 
-from src.commands import setup_commands
-from src.commands import kb_commands
-from src.commands import job_commands
-from src.commands import ai_commands
-from src.commands.utils import CONTEXT_SETTINGS, RichHelpFormatter
+from .commands import setup_commands
+from .commands import kb_commands
+from .commands import job_commands
+from .commands import ai_commands
+from .commands.utils import CONTEXT_SETTINGS, RichHelpFormatter
 
 
 # Initialize Rich Console

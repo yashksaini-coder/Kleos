@@ -32,6 +32,7 @@ dependencies = [
     "pandas",
     "rich",
     "python-dotenv", # For loading .env files if used
+    "psycopg2-binary", # For PostgreSQL/PGVector support
     "importlib-metadata; python_version<'3.8'", # For reading package version in older Python
 ]
 
@@ -42,7 +43,7 @@ Repository = "https://github.com/yashksaini-coder/Kleos"
 # Documentation = "URL_TO_YOUR_DOCS_IF_HOSTED_ELSEWHERE"
 
 [project.scripts]
-kleos = "main:cli"
+kleos = "src.main:cli"
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -54,7 +55,7 @@ include = ["src*", "config*"] # Include necessary packages/modules
 
 [tool.setuptools.package-data]
 kleos = ["py.typed"]
-config = ["*.py"] # if config.py is needed
+config = ["*.py", "*.example.py"] # Include config files
 # Add other package data if necessary, e.g. example files
 
 [tool.ruff]

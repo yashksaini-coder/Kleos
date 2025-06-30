@@ -1,5 +1,12 @@
 import mindsdb_sdk
-from config import config
+try:
+    from config import config
+except ImportError:
+    # When installed as package, config might be at different location
+    import sys
+    import os
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+    from config import config
 import pandas as pd
 import time
 import json # Ensure json is imported for create_kb_agent
