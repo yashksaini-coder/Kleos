@@ -5,9 +5,17 @@
 [![MindsDB](https://img.shields.io/badge/Powered%20by-MindsDB_Knowledge_Base-purple)](https://mindsdb.com)
 
 
-This project provides a powerful and interactive, Command Line Interface (CLI) for interacting with MindsDB, with a special focus on its Knowledge Base features and AI Agent integration. It also includes a suite of scripts for performance benchmarking, stress testing, and evaluating MindsDB's reranking capabilities.
+**Kleos** provides a powerful and interactive, Command Line Interface (CLI) for interacting with MindsDB, with a special focus on its Knowledge Base features and AI Agent integration. It also includes a suite of scripts for performance benchmarking, stress testing, and evaluating MindsDB's reranking capabilities.
 
-To know learn more about the commands and advanced usage, please refer to the [**COMMANDS_REFERENCE.md**](./COMMANDS_REFERENCE.md) file.
+*   To learn more about the commands and advanced usage, please refer to the [**COMMANDS_REFERENCE.md**](./COMMANDS_REFERENCE.md) file.
+
+*   For a quick overview of the most common commands and their usage, see the [**Quick-examples.md**](./Quick-examples.md) file.
+
+# 🎥 Project Showcase
+
+| Demo Video                                                                 | DEV Post                                                                 |
+|----------------------------------------------------------------------------|--------------------------------------------------------------------------|
+| [![YouTube](./public/Kleos%20About%20Banner.jpeg)](https://www.youtube.com/watch?v=lfkm1IUKwOQ) | [![DEV](./public/Kleos%20Banner.jpeg)](https://dev.to/yashksaini/kleos-cli-mindsdb-knowledge-base-supercharged-1a83) |
 
 ## Features
 
