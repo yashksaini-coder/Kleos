@@ -385,7 +385,7 @@ kleos kb create-agent my_kb_assistant --model-name gemini-2.0-flash \
 Create an agent using Google Gemini model (ensure MindsDB integration is set up, cause this command works asynchronously so no callback check):
 ```bash
 # PowerShell/Bash/Zsh
-kleos kb create-agent --model-name gemini-2.0-flash --include-knowledge-bases ["hn_kb_test"] --google-api-key "AIzaSyD1w6o-bSYXAoBtuhNhAqZ27gI-_uNMl3A" --include-tables ["hackernews.hnstories"] --prompt-template "You are a wise scholar who knows everything about the current YC hackernews"
+kleos kb create-agent --model-name gemini-2.0-flash --include-knowledge-bases ["hn_kb_test"] --google-api-key "YOUR_GEMINI_API_KEY" --include-tables ["hackernews.hnstories"] --prompt-template "You are a wise scholar who knows everything about the current YC hackernews"
 ```
 
 ---
