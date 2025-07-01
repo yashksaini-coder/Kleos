@@ -382,19 +382,11 @@ kleos kb create-agent my_kb_assistant --model-name gemini-2.0-flash \
   --prompt-template "Answer based on provided documents: {{question}}"
 ```
 
-Create an agent using a local Ollama Llama3 model (ensure Ollama integration is set up in MindsDB):
+Create an agent using Google Gemini model (ensure MindsDB integration is set up, cause this command works asynchronously so no callback check):
 ```bash
 # PowerShell/Bash/Zsh
-kleos kb create-agent ollama_chat --model-name llama3 \
-  --include-knowledge-bases my_local_kb \
-  --other-params '{"provider":"ollama", "ollama_serve_address":"http://localhost:11434"}'
-# Windows CMD (example for JSON escaping)
-kleos kb create-agent ollama_chat --model-name llama3 ^
-  --include-knowledge-bases my_local_kb ^
-  --other-params "{\"provider\":\"ollama\", \"ollama_serve_address\":\"http://localhost:11434\"}"
+kleos kb create-agent --model-name gemini-2.0-flash --include-knowledge-bases ["hn_kb_test"] --google-api-key "AIzaSyD1w6o-bSYXAoBtuhNhAqZ27gI-_uNMl3A" --include-tables ["hackernews.hnstories"] --prompt-template "You are a wise scholar who knows everything about the current YC hackernews"
 ```
-*(Note: `provider` or specific LLM host parameters like `ollama_serve_address` might be needed in `--other-params` if not inferred by MindsDB from the model name for some setups or self-hosted models).*
-*(Note on JSON parameters: Ensure correct quoting for your shell as described in the main README)*
 
 ---
 
@@ -480,7 +472,7 @@ Generate test data and evaluate using LLM relevancy with Google Gemini, saving r
 # Ensure GOOGLE_GEMINI_API_KEY is in .env or provide --llm-api-key
 kleos kb evaluate sales_kb --test-table my_project.generated_sales_eval \\
   --generate-data --generate-data-count 30 --version llm_relevancy \\
-  --llm-provider google --llm-model-name gemini-pro \\
+  --llm-provider google --llm-model-name gemini-pro
   --save-to-table my_project.sales_eval_results
 ```
 
@@ -537,11 +529,11 @@ kleos ai create-model <model_name> --select-data-query <query> --predict-column 
 
 Create a text summarizer using OpenAI:
 ```bash
-kleos ai create-model news_summarizer \\
-  --select-data-query "SELECT article_text FROM news_data.articles" \\
-  --predict-column summary --engine openai \\
-  --prompt-template "Summarize this article: {{article_text}}" \\
-  --param api_key YOUR_OPENAI_KEY --param model_name gpt-3.5-turbo
+kleos ai create-model story_summarizer
+  --select-data-query "SELECT title, text, score FROM hackernews.hnstories" 
+  --predict-column summary --engine google_gemini
+  --prompt-template "Summarize the {{text}} of the hackernews stories, with {{title}}, {{score}} and explain in short passage." 
+  --param api_key YOUR_GEMINI_KEY --param model_name "gemini-2.0-flash"
 ```
 
 Create a sentiment classifier using Google Gemini:
@@ -710,7 +702,7 @@ kleos ai query <query_string> [OPTIONS]
 
 Query an AI Model 'my_summarizer_model' by joining with HackerNews data:
 ```bash
-kleos ai query "SELECT t.title, t.text, m.summary FROM my_hackernews.stories AS t JOIN mindsdb.my_summarizer_model AS m WHERE t.score > 100 LIMIT 2"
+kleos ai query "SELECT t.title, t.text, m.summary FROM hackernews.hnstories AS t JOIN mindsdb.test_model_4 AS m WHERE t.score > 100 LIMIT 2"
 ```
 
 Directly query a model 'my_translator_model' that takes input via a WHERE clause:
@@ -758,7 +750,7 @@ kleos job update-hn-refresh <job_name> [OPTIONS]
 
 **Example:**
 ```bash
-kleos job update-hn-refresh daily_hackernews_refresh --hn-datasource my_hndb --schedule "EVERY 1 day at 04:00"
+kleos job update-hn-refresh hn_update_job --hn-datasource my_hndb --schedule "EVERY 1 day"
 ```
 
 ---
@@ -891,9 +883,9 @@ kleos job create <job_name> <sql_statements> [OPTIONS]
 
 **Example:**
 ```bash
-kleos job create my_nightly_ingest \
-  "INSERT INTO main_table SELECT * FROM staging_table WHERE date = CURRENT_DATE; DELETE FROM staging_table;" \
-  --schedule "EVERY 1 day at 01:00"
+kleos job create my_nightly_ingest
+  "INSERT INTO main_table SELECT * FROM staging_table WHERE date = CURRENT_DATE; DELETE FROM staging_table;" 
+  --schedule "EVERY 1 day"
 ```
 
 ---
