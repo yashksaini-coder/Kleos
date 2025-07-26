@@ -386,6 +386,8 @@ Create an agent using Google Gemini model (ensure MindsDB integration is set up,
 ```bash
 # PowerShell/Bash/Zsh
 kleos kb create-agent --model-name gemini-2.0-flash --include-knowledge-bases ["hn_kb_test"] --google-api-key "YOUR_GEMINI_API_KEY" --include-tables ["hackernews.hnstories"] --prompt-template "You are a wise scholar who knows everything about the current YC hackernews"
+
+kleos kb create-agent --model-name gemini-2.0-flash --include-knowledge-bases ["gemini_kb_5"] --google-api-key "AIzaSyCiYSVMSw3ZF2ijcRloS2Y36X_m9qLof9k" --include-tables ["hackernews.stories"] --prompt-template "You are a wise scholar who knows everything about the current YC hackernews"
 ```
 
 ---

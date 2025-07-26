@@ -10,6 +10,8 @@ setup hackernews --name test_Hn
 ### Create Knowledge Base
 ```bash
 kb create hn_stories_kb --embedding-model nomic-embed-text --reranking-provider ollama --reranking-model gemma3 --content-columns 'title,text' --metadata-columns 'id,by,score,time' --id-column id
+
+kb create gemini_kb --embedding-provider ollama --embedding-model nomic-embed-text --reranking-provider ollama --reranking-provider google --reranking-model gemini-2.0-flash --reranking-api-key AIzaSyCiYSVMSw3ZF2ijcRloS2Y36X_m9qLof9k --content-columns text --metadata-columns 'score,title' --id-column id
 ```
 
 ### Ingest Data
@@ -41,11 +43,7 @@ ai list-models
 
 ### Create Model
 ```bash
-ai create-model story_summarizer
-    --select-data-query "SELECT title, text, score FROM hackernews.hnstories" 
-    --predict-column summary --engine google_gemini
-    --prompt-template "Summarize the {{text}} of the hackernews stories, with {{title}}, {{score}} and explain in short passage." 
-    --param api_key YOUR_GEMINI_KEY --param model_name "gemini-2.0-flash"
+ai create-model story_summarizer --select-data-query "SELECT title, text, score FROM hackernews.hnstories" --predict-column summary --engine google_gemini --prompt-template "Summarize the {{text}} of the hackernews stories, with {{title}}, {{score}} and explain in short passage." --param api_key YOUR_GEMINI_KEY --param model_name "gemini-2.0-flash"
 ```
 
 ### Describe Model
@@ -93,6 +91,9 @@ job history hn_update_job
 ### Create Job
 ```bash
 job create my_nightly_ingest "INSERT INTO main_table SELECT * FROM staging_table WHERE date = CURRENT_DATE; DELETE FROM staging_table;" --schedule "EVERY 1 day"
+
+job create refresh_hn "DROP DATABASE IF EXISTS hackernews; CREATE DATABASE hackernews WITH ENGINE = 'hackernews';" --schedule "EVERY 1 day"
+
 ```
 
 ### Job Logs
