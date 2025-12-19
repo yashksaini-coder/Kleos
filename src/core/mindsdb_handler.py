@@ -1,12 +1,24 @@
 import mindsdb_sdk
+import sys
+import os
+
+# Prioritize local configuration from the current working directory
+if os.getcwd() not in sys.path:
+    sys.path.insert(0, os.getcwd())
+
 try:
+    # Try importing 'config' directly (picks up local config/config.py if cwd is in path)
     from config import config
 except ImportError:
-    # When installed as package, config might be at different location
-    import sys
-    import os
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-    from config import config
+    try:
+        # Try relative import
+        from ..config import config
+    except (ImportError, ValueError):
+        try:
+            # Try importing from src.config
+            from src.config import config
+        except ImportError:
+             raise ImportError("Could not import 'config'. Please ensure 'config/config.py' exists in your current directory.")
 import pandas as pd
 import time
 import json # Ensure json is imported for create_kb_agent

@@ -35,7 +35,7 @@ fi
 # ---------------------------
 # pip Check
 # ---------------------------
-if ! command -v pip3 &>/dev/null && ! command -v pip &>/dev/null; then
+if ! command -v uv pip &>/dev/null && ! command -v python -m pip &>/dev/null; then
     print_error "pip is not installed. Please install pip."
     exit 1
 else
@@ -87,7 +87,7 @@ fi
 # Install Kleos CLI
 # ---------------------------
 print_info "Installing Kleos CLI..."
-pip install . || {
+uv pip install . || {
     print_error "Failed to install Kleos CLI."
     exit 1
 }
